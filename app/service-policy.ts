@@ -1,0 +1,6 @@
+export const serviceBooks=[{id:'supervisor',name:'Supervisor'},{id:'adjunto',name:'Adjunto'},{id:'nautica',name:'Náutica'},{id:'ssmt',name:'SSMT'}];
+export function normalizeRg(value:unknown){return String(value??'').replace(/\D/g,'').replace(/^0+/,'');}
+export function assignmentRg(value:string){const numbers=String(value||'').match(/\b\d{4,8}\b/g)||[];return numbers.length===1?normalizeRg(numbers[0]):'';}
+export function nauticalAssignments(rows:string[]){return rows.flatMap(row=>row.split(/\s*\/\s*/)).map(v=>v.trim()).filter(v=>assignmentRg(v));}
+export function canSignAssigned(type:string,crew:string[],rg:string,adjuntosDaEscala:string[]=[]){if(type==='adjunto')return adjuntosDaEscala.some(value=>assignmentRg(value)===normalizeRg(rg));if(type==='nautica')return nauticalAssignments(crew.slice(8,11)).some(value=>assignmentRg(value)===normalizeRg(rg));const indexes=type==='officer'?[0]:type==='supervisor'?[5]:type==='nautica'?[8,9,10]:type==='ssmt'?[12,13]:[];return indexes.some(i=>assignmentRg(crew[i])===normalizeRg(rg));}
+export function dependencies(rows:any[],officer:string){return serviceBooks.map(b=>{const row=rows.find(r=>r.book_type===b.id);return {...b,complete:!!(row?.signature&&row?.officer_signature&&row.officer_rg===officer),version:row?.version||null};});}

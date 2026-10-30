@@ -1,0 +1,11 @@
+ALTER TABLE livros.users DROP CONSTRAINT users_role_check;
+ALTER TABLE livros.users ADD CONSTRAINT users_role_check CHECK(role IN ('admin','officer','reviewer','enlisted'));
+ALTER TABLE livros.users ADD COLUMN rank text NOT NULL DEFAULT '';
+ALTER TABLE livros.users ADD COLUMN first_login boolean NOT NULL DEFAULT false;
+CREATE TABLE livros.assignment_events(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,date text NOT NULL,book_type text NOT NULL,actor text NOT NULL REFERENCES livros.users(rg),previous_assignment text NOT NULL,replacement text NOT NULL,reason text NOT NULL,created_at text NOT NULL);
+ALTER TABLE livros.assignment_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON livros.assignment_events FROM PUBLIC;
+CREATE TRIGGER assignment_events_immutable BEFORE UPDATE OR DELETE ON livros.assignment_events FOR EACH ROW EXECUTE FUNCTION livros.block_mutation();
+CREATE TABLE livros.service_attestations(date text NOT NULL,book_type text NOT NULL CHECK(book_type IN ('supervisor','adjunto','nautica','ssmt')),version integer NOT NULL,author text NOT NULL REFERENCES livros.users(rg),signature text NOT NULL,officer_rg text REFERENCES livros.users(rg),officer_signature text,PRIMARY KEY(date,book_type));
+ALTER TABLE livros.service_attestations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON livros.service_attestations FROM PUBLIC;
