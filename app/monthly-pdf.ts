@@ -2,7 +2,7 @@ import {PDFDocument,rgb} from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import * as fonts from './pdf-fonts';
 import {timaoPng} from './brand';
-export async function makeMonthlyPdf(month:string,books:any[],title="LIVRO DO OFICIAL DE DIA"){
+export async function makeMonthlyPdf(month:string,books:any[],title="LIVRO DO OFICIAL DE DIA",render?:(book:any)=>Promise<string>){
  if(!books.length||books.length>31)throw new Error('Quantidade de livros inválida para o mês.');
  const doc=await PDFDocument.create();doc.registerFontkit(fontkit);const font=await doc.embedFont(fonts.sans,{subset:true}),bold=await doc.embedFont(fonts.bold,{subset:true}),logo=await doc.embedPng(timaoPng);
  const page=doc.addPage([595.28,841.89]),navy=rgb(.055,.16,.29),grey=rgb(.35,.4,.46);
@@ -15,6 +15,6 @@ export async function makeMonthlyPdf(month:string,books:any[],title="LIVRO DO OF
  text('Dias sem livro: '+(missing.join(', ')||'nenhum'),36,647,8);
  text('DIA',36,621,9,true);text('RESPONSÁVEL',92,621,9,true);text('SITUAÇÃO / VERSÃO',340,621,9,true);text('PÁGINA',505,621,9,true);
  let y=603,total=0;
- for(const book of books){total+=book.pdf.length;if(total>45*1024*1024)throw new Error('Volume mensal muito grande. Baixe os PDFs diários.');const pdf=await PDFDocument.load(book.pdf);const first=doc.getPageCount()+1;const pages=await doc.copyPages(pdf,pdf.getPageIndices());pages.forEach(p=>doc.addPage(p));text(book.date.slice(8)+'/'+month.slice(5),36,y,9);let name=clean(book.author_name);while(font.widthOfTextAtSize(name,8)>230)name=name.slice(0,-1);text(name,92,y,8);text(`${book.status} / v${book.version}`,340,y,9);text(String(first),515,y,9);page.drawLine({start:{x:36,y:y-5},end:{x:559,y:y-5},thickness:.3,color:rgb(.8,.83,.86)});y-=16;}
+ for(const book of books){const source=render?await render(book):book.pdf;total+=source.length;if(total>45*1024*1024)throw new Error('Volume mensal muito grande. Baixe os PDFs diários.');const pdf=await PDFDocument.load(source);const first=doc.getPageCount()+1;const pages=await doc.copyPages(pdf,pdf.getPageIndices());pages.forEach(p=>doc.addPage(p));text(book.date.slice(8)+'/'+month.slice(5),36,y,9);let name=clean(book.author_name);while(font.widthOfTextAtSize(name,8)>230)name=name.slice(0,-1);text(name,92,y,8);text(`${book.status} / v${book.version}`,340,y,9);text(String(first),515,y,9);page.drawLine({start:{x:36,y:y-5},end:{x:559,y:y-5},thickness:.3,color:rgb(.8,.83,.86)});y-=16;}
  text('Este volume inclui rascunhos e livros pendentes, quando existentes.',36,77,9);text('A exportação não substitui a assinatura nem a conferência dos livros.',36,61,9);page.drawText('Gerado em '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}),{x:36,y:40,size:8,font,color:grey});doc.setTitle(title+' - '+month+' - 2º GMAR');doc.setAuthor('2º Grupamento Marítimo');return doc.save();
 }

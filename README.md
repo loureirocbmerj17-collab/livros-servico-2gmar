@@ -1,6 +1,6 @@
 # Livros de Serviço — 2º GMAR
 
-Aplicação independente do ChatGPT: Next.js na Vercel, PostgreSQL e arquivos privados no Supabase. Login próprio por RG/senha. Não utiliza API de IA.
+Aplicação independente do ChatGPT: Next.js na Vercel, PostgreSQL no Supabase. Login próprio por RG/senha. Não utiliza API de IA.
 
 ## Recursos
 
@@ -10,24 +10,27 @@ Aplicação independente do ChatGPT: Next.js na Vercel, PostgreSQL e arquivos pr
 - Livro salvo abre somente para leitura. Autor pode usar **Retificar livro** até conferência.
 - Assinatura desenhada e confirmação por senha; PDF com timão e identidade visual.
 - Perfil `reviewer` confere livro assinado de outro autor, com senha. Conferência bloqueia alterações também no banco.
-- Histórico de versões, PDFs originais de cada versão e registro de ações administrativas.
+- Histórico imutável dos dados e assinaturas de cada versão e registro de ações administrativas. PDFs gerados apenas no download.
 - PDF mensal com capa, índice, dias ausentes e últimas versões em ordem cronológica; rascunhos/pendências identificados.
 
 ## Publicação
 
 1. Use Node 22 ou 24 e pnpm 11.25.0. Execute `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm build`.
-2. No Supabase, aplique `supabase/schema.sql` uma única vez em banco novo e depois `supabase/storage.sql`. O esquema `livros` é privado, separado da SAD. **Na conta 2º GMAR ONLINE estes scripts já foram aplicados em 25/10/2026. Não execute novamente.**
+2. No Supabase, aplique `supabase/schema.sql` uma única vez em banco novo e depois `access-rules.sql`, `nautica.sql`, `ssmt.sql` e as migrações em ordem. O esquema `livros` é privado, separado da SAD. **Na conta 2º GMAR ONLINE estes scripts já foram aplicados em 25/10/2026. Não execute novamente.**
 3. Configure as variáveis abaixo diretamente na Vercel, ambiente Production. Não cole segredos em chat nem os coloque no GitHub:
    - `DATABASE_URL` (ou `POSTGRES_URL` da integração): URI do Transaction Pooler fornecida no botão Connect do Supabase; senha com caracteres especiais codificada na URI.
    - `DATABASE_CA_CERT`: certificado raiz do banco, se necessário para verificação TLS; não desabilite a verificação de certificados.
    - `SUPABASE_URL`: URL do projeto.
-   - `SUPABASE_SERVICE_ROLE_KEY` (ou `SUPABASE_SECRET_KEY` da integração): chave secreta de serviço, usada somente no servidor para arquivos privados.
+   - `SUPABASE_SERVICE_ROLE_KEY` (ou `SUPABASE_SECRET_KEY` da integração): chave secreta de serviço, necessária somente durante a limpeza dos arquivos legados.
    - `SUPABASE_PDF_BUCKET`: `livros-pdf`.
    - `SETUP_TOKEN`: código aleatório com pelo menos 32 caracteres, somente para primeiro administrador. Remova após a configuração inicial, ou omita se usuários antigos forem migrados.
 4. Importe este diretório como raiz de um repositório privado GitHub na Vercel. Framework Next.js, comando `pnpm build`.
 5. Verifique login/assinatura/conferência/download com contas de teste antes do uso oficial. Quando o sistema estiver validado, libere o endereço de produção da proteção de login Vercel: a autenticação de RG/senha permanecerá obrigatória no aplicativo.
 
-O bucket deve permanecer privado. Downloads são autorizados após login por links de 120 segundos. Os PDFs diários originais permanecem também no banco para preservar todas as versões. O volume mensal é montado a partir desses arquivos; não recalcula dados assinados. A confirmação por senha é uma atestação interna com SHA-256, não certificado ICP-Brasil.
+PDFs diários, históricos e mensais são gerados em memória e entregues como resposta autenticada, sem gravação no banco ou em Storage. Dados, assinaturas desenhadas, atestações e revisões permanecem no banco. O conteúdo histórico é preservado; a apresentação usa o gerador PDF atual. A migração `supabase/migrations/20261030172746_pdf_on_demand.sql` limpa somente PDFs legados, verifica igualdade dos demais dados e impede novos payloads PDF. Publique o código antes de aplicá-la; não reverta para o código antigo depois da migração.
+
+Os rascunhos locais são separados por RG, livro, data e versão, expiram em 7 dias e não guardam senha nem desenho de assinatura. Recuperação exige clique explícito; versões desatualizadas não são recuperadas. Salvar no sistema continua obrigatório. Os avisos de leitura menor não impedem correções legítimas; registre a justificativa nas observações.
+
 
 ## Estado em 26/10/2026
 

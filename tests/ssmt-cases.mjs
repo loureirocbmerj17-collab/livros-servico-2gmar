@@ -12,7 +12,7 @@ await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:
 await post('login',{rg:'99997',password});await post('ssmtChiefReview',{date,version:2,password,drawing});
 await post('login',{rg:'99996',password});await post('ssmtSave',{date,version:3,data:d},409);
 await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:3,password,drawing});
-const row=(await sql.query('SELECT * FROM livros.ssmt_books WHERE date=$1',[date])).rows[0];assert.equal(row.status,'Conferido');fs.writeFileSync(path.join(qa,'ssmt-daily.pdf'),Buffer.from(row.pdf,'base64'));
+const row=(await sql.query('SELECT * FROM livros.ssmt_books WHERE date=$1',[date])).rows[0];assert.equal(row.status,'Conferido');fs.writeFileSync(path.join(qa,'ssmt-daily.pdf'),new Uint8Array(await (await get('op=ssmtPdf&date='+date)).arrayBuffer()));
 assert.equal((await get('op=monthPdf&type=ssmt&month=2026-12')).status,200);
 await post('login',{rg:'99996',password});assert.equal((await(await get('op=ssmtList')).json()).length,1);const overview=await(await get('op=operationalOverview')).json();assert.equal(overview.ssmt.date,date);assert.equal(overview.ssmt.inventory[0].sisgeo,true);
 assert.equal((await sql.query("SELECT officer_rg FROM livros.service_attestations WHERE date=$1 AND book_type='ssmt'",[date])).rows[0].officer_rg,'99998');

@@ -39,9 +39,9 @@ export async function run({post,get,sql,drawing,password,qa}){
  await post('nauticalReview',{date,version:5,password,drawing},409);
  await assert.rejects(sql.query("UPDATE livros.nautical_books SET status='Rascunho'"));await assert.rejects(sql.query('DELETE FROM livros.nautical_revisions'));await assert.rejects(sql.query('DELETE FROM livros.nautical_books'));
  assert.equal((await sql.query('SELECT count(*) n FROM livros.nautical_purchases')).rows[0].n,1);
- assert.equal((await get('op=monthPdf&type=nautica&month=2026-11')).status,200);
- fs.writeFileSync(path.join(qa,'nautica-daily.pdf'),Buffer.from(record.pdf,'base64'));fs.writeFileSync(path.join(qa,'nautica-monthly.pdf'),globalThis.savedPdfs.at(-1).bytes);
- const monthly=await PDFDocument.load(globalThis.savedPdfs.at(-1).bytes),daily=await PDFDocument.load(record.pdf);assert.equal(monthly.getPageCount(),daily.getPageCount()+1);
+ const monthResponse=await get('op=monthPdf&type=nautica&month=2026-11');assert.equal(monthResponse.status,200);const monthlyBytes=new Uint8Array(await monthResponse.arrayBuffer());assert.equal(record.pdf,'');const dailyBytes=new Uint8Array(await (await get('op=nauticalPdf&date='+date)).arrayBuffer());
+ fs.writeFileSync(path.join(qa,'nautica-daily.pdf'),dailyBytes);fs.writeFileSync(path.join(qa,'nautica-monthly.pdf'),monthlyBytes);
+ const monthly=await PDFDocument.load(monthlyBytes),daily=await PDFDocument.load(dailyBytes);assert.equal(monthly.getPageCount(),daily.getPageCount()+1);
  const history=await (await get('op=nauticalHistory&date='+date)).json();assert.equal(history.length,6);
  await post('login',{rg:'99996',password});await post('nauticalSave',{date,version:5,data},409);
  assert.equal((await get('op=book&date='+date)).status,403);assert.equal((await get('op=list')).status,403);

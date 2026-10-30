@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+import React from 'react';
+import {create,act} from 'react-test-renderer';
+fs.mkdirSync('.qa',{recursive:true});
+fs.writeFileSync('.qa/draft-recovery.mjs',ts.transpileModule(fs.readFileSync('app/draft-recovery.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
+const {useDraftRecovery,ReadingWarnings,SigningChecklist}=await import('../.qa/draft-recovery.mjs');
+globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+const values=new Map();globalThis.localStorage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+let hook,restored;
+function Harness(p){hook=useDraftRecovery('ssmt',p.rg||'123',p.date||'2026-10-30',p.version||0,p.data,p.dirty,p.enabled!==false,d=>restored=d);return hook.panel;}
+const data={date:'2026-10-30',observations:'Trabalho em andamento',signatureDrawing:'not stored'};
+let root;await act(()=>{root=create(React.createElement(Harness,{data,dirty:true}));});
+const key='gmar-draft-v1:123:ssmt:2026-10-30';assert.equal(JSON.parse(values.get(key)).data.observations,data.observations);assert.equal(JSON.parse(values.get(key)).data.signatureDrawing,undefined);
+await act(()=>root.unmount());await act(()=>{root=create(React.createElement(Harness,{data:{...data,observations:'blank'},dirty:true}));});
+assert.equal(JSON.parse(values.get(key)).data.observations,data.observations,'Opening must not overwrite pending recovery');
+await act(()=>root.root.findAllByType('button')[0].props.onClick());assert.equal(restored.observations,data.observations);
+await act(()=>hook.clear());assert.equal(values.has(key),false);
+await act(()=>root.unmount());values.set(key,JSON.stringify({version:0,at:Date.now(),data}));
+await act(()=>{root=create(React.createElement(Harness,{data,version:1,dirty:false}));});assert.equal(values.has(key),false,'Stale server version invalidates local copy');await act(()=>root.unmount());
+values.set(key,JSON.stringify({version:0,at:Date.now(),data}));await act(()=>{root=create(React.createElement(Harness,{data,rg:'456',dirty:false}));});assert.equal(root.toJSON(),null,'Another RG cannot recover the local draft');await act(()=>root.unmount());
+await act(()=>{root=create(React.createElement(ReadingWarnings,{data:{inventory:[{id:'v',prefix:'ASE',hours:'9',previousHours:'10',unavailable:false}]}}));});assert.match(JSON.stringify(root.toJSON()),/anterior/);await act(()=>root.unmount());
+await act(()=>{root=create(React.createElement(SigningChecklist,{issues:['Confirme as viaturas']}));});assert.match(JSON.stringify(root.toJSON()),/Confirme as viaturas/);await act(()=>root.unmount());
+console.log('PASS UI safeguards: local autosave, explicit recovery, no signature storage, stale-version and RG isolation, reading warning and signature checklist.');

@@ -2,7 +2,7 @@ import ts from 'typescript';import fs from 'node:fs';import path from 'node:path
 const qa=path.resolve('.qa');fs.mkdirSync(qa,{recursive:true});
 function compile(source,dest){fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
 for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
-compile(fs.readFileSync('lib/database.ts','utf8'),'database');
+compile(fs.readFileSync('lib/database.ts','utf8'),'database');compile(fs.readFileSync('lib/storage.ts','utf8'),'storage');
 const {folderFiles,matchesDay,newestScale,driveFileTimes}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
 assert.deepEqual(folderFiles('<tr data-id="doc123"><td aria-label="27 DE OUTUBRO Google Docs Shared"></td></tr><tr data-id="pdf123"><td aria-label="28 DE OUTUBRO.pdf Shared"></td></tr>'),[{id:'doc123',name:'27 DE OUTUBRO',type:'doc'},{id:'pdf123',name:'28 DE OUTUBRO.pdf',type:'pdf'}]);
 assert.equal(matchesDay('13 OUTUBRO','2026-10-13'),true);
@@ -22,9 +22,9 @@ await sql.exec(fs.readFileSync('supabase/nautica.sql','utf8'));await sql.exec(fs
 const {createDatabase}=await import(pathToFileURL(path.join(qa,'database.mjs')));
 const client={async query(q,values){const r=await sql.query(q,values);return {rows:r.rows,rowCount:r.affectedRows??r.rows.length}},release(){}};
 globalThis.testDb=createDatabase(()=>({...client,async connect(){return client}}));
-globalThis.savedPdfs=[];globalThis.storePdf=async(bytes,filename)=>{globalThis.savedPdfs.push({bytes,filename});return 'https://test.supabase.co/signed-test-link'};
+
 globalThis.scaleCrew=['CAP RG 99998 TESTE'];
-compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("import { storePdf } from '../../../lib/storage';","const storePdf=globalThis.storePdf;").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
+compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("from '../../../lib/storage'","from './storage'").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
 const {POST,GET}=await import(pathToFileURL(path.join(qa,'route.mjs')));const {blank}=await import(pathToFileURL(path.join(qa,'book-model.mjs')));
 let cookie='';const password='Test-password-42!',setupToken='TEST-ONLY-INITIAL-SETUP-CODE-32-CHARS';process.env.SETUP_TOKEN=setupToken;
 async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];return v}
@@ -45,14 +45,14 @@ await post('login',{rg:'99997',password});await post('save',{date,version:4,data
 await post('login',{rg:'99998',password});await post('save',{date,version:5,data},409);
 await assert.rejects(sql.query("UPDATE livros.books SET status='Rascunho'"));await assert.rejects(sql.query('DELETE FROM livros.books'));await assert.rejects(sql.query("UPDATE livros.revisions SET status='Rascunho'"));await assert.rejects(sql.query('DELETE FROM livros.revisions'));
 const rev=(await sql.query('SELECT * FROM livros.revisions ORDER BY version')).rows;assert.equal(rev.length,5);assert.equal(JSON.parse(rev[1].data).signatureDrawing,drawing);assert.equal(rev[2].signature,null);
-const before=(await sql.query('SELECT * FROM livros.books')).rows[0];const original=before.pdf;fs.writeFileSync(path.join(qa,'daily.pdf'),Buffer.from(original,'base64'));
+const before=(await sql.query('SELECT * FROM livros.books')).rows[0];assert.equal(before.pdf,'');const original=Buffer.from(await (await get('op=pdf&date='+date)).arrayBuffer()).toString('base64');fs.writeFileSync(path.join(qa,'daily.pdf'),Buffer.from(original,'base64'));
 const data2={...data,date:'2026-10-24'};await post('save',{date:data2.date,version:0,data:data2});
 assert.equal((await get('op=monthPdf&month=2026-13')).status,400);assert.equal((await get('op=monthPdf&month=2026-09')).status,404);
-const month=await get('op=monthPdf&month=2026-10');assert.equal(month.status,200);assert.match((await month.json()).downloadUrl,/supabase/);
-const monthly=globalThis.savedPdfs.at(-1).bytes;fs.writeFileSync(path.join(qa,'monthly.pdf'),monthly);
-const dailyDoc=await PDFDocument.load(original),monthDoc=await PDFDocument.load(monthly);const draftPdf=(await sql.query('SELECT pdf FROM livros.books WHERE date=$1',[data2.date])).rows[0].pdf;assert.equal(monthDoc.getPageCount(),1+dailyDoc.getPageCount()+(await PDFDocument.load(draftPdf)).getPageCount());
-assert.equal((await sql.query('SELECT pdf FROM livros.books WHERE date=$1',[date])).rows[0].pdf,original);
-const single=await get('op=pdf&date='+date+'&version=2');assert.equal(single.status,303);
+const month=await get('op=monthPdf&month=2026-10');assert.equal(month.status,200);assert.match(month.headers.get('content-type'),/application\/pdf/);assert.equal(month.headers.get('cache-control'),'private, no-store');
+const monthly=new Uint8Array(await month.arrayBuffer());fs.writeFileSync(path.join(qa,'monthly.pdf'),monthly);
+const dailyDoc=await PDFDocument.load(original),monthDoc=await PDFDocument.load(monthly);const draftPdf=await (await get('op=pdf&date='+data2.date)).arrayBuffer();assert.equal(monthDoc.getPageCount(),1+dailyDoc.getPageCount()+(await PDFDocument.load(draftPdf)).getPageCount());
+assert.equal((await sql.query('SELECT pdf FROM livros.books WHERE date=$1',[date])).rows[0].pdf,'');
+const single=await get('op=pdf&date='+date+'&version=2');assert.equal(single.status,200);assert.ok((await single.arrayBuffer()).byteLength>1000);
 // Legacy 12-slot book must retain exactly the same data and signature through review.
 const legacy={...data,date:'2026-10-22',crew:data.crew.slice(0,12),signatureDrawing:drawing};
 await sql.query('INSERT INTO livros.books VALUES($1,$2,$3,1,$4,$5,$6,NULL,$2,$7,$8)',[legacy.date,'99998','TESTE OFICIAL','Assinado',JSON.stringify(legacy),'legacy-attestation',new Date().toISOString(),original]);
@@ -64,4 +64,12 @@ console.log('PASS PostgreSQL: setup protection; login; author/reviewer permissio
 
 await import('./ssmt-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
 
+const tables=['books','revisions','nautical_books','nautical_revisions','ssmt_books','ssmt_revisions'];
+const snapshots={};for(const table of tables)snapshots[table]=(await sql.query(`SELECT to_jsonb(t)-'pdf' d FROM livros.${table} t ORDER BY date,version`)).rows;
+await sql.exec(fs.readFileSync('supabase/migrations/20261030172746_pdf_on_demand.sql','utf8'));
+for(const table of tables){assert.deepEqual((await sql.query(`SELECT to_jsonb(t)-'pdf' d FROM livros.${table} t ORDER BY date,version`)).rows,snapshots[table]);assert.equal((await sql.query(`SELECT count(*) n FROM livros.${table} WHERE pdf<>''`)).rows[0].n,0);}
+await post('login',{rg:'99998',password});
+for(const [type,day] of [['pdf','2026-10-23'],['nauticalPdf','2026-11-02'],['ssmtPdf','2026-12-12']]){const r=await get('op='+type+'&date='+day+'&version=1');assert.equal(r.status,200);assert.ok((await r.arrayBuffer()).byteLength>1000);}
+await assert.rejects(sql.query("UPDATE livros.revisions SET pdf='payload'"));
+console.log('PASS data-only migration: exact preservation of all data/signatures/history; zero PDF bytes; downloads from stored data.');
 await sql.close();
