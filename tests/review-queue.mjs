@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 export async function run({post,get,sql,password}){
- for(const rg of ['99998','99996','99999']){await post('login',{rg,password});assert.equal((await get('op=reviewQueue&month=2026-10')).status,403);}
+ for(const rg of ['99998','99996']){await post('login',{rg,password});assert.equal((await get('op=reviewQueue&month=2026-10')).status,403);}
  await post('login',{rg:'99997',password});
  assert.equal((await get('op=reviewQueue&month=invalid')).status,400);
  const source=(await sql.query("SELECT * FROM livros.books WHERE date='2026-10-23'")).rows[0];
@@ -13,6 +13,10 @@ export async function run({post,get,sql,password}){
  assert.ok(rows[2].reasons.some(r=>r.includes('Outro subcomandante')));
  assert.equal(rows[1].dependencies.filter(d=>!d.complete).length,4);
  assert.equal(rows.some(r=>r.data||r.signature),false);
+ await post('login',{rg:'99999',password});
+ assert.equal((await get('op=reviewQueue&month=2031-01')).status,200);
+ await post('review',{date:'2031-01-01',version:1,password},403);
+ await post('login',{rg:'99997',password});
  await post('review',{date:'2031-01-01',version:1,password});
  rows=await (await get('op=reviewQueue&month=2031-01')).json();assert.equal(rows[0].group,'reviewed');
  await post('review',{date:'2031-01-01',version:1,password},409);

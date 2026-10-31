@@ -3,7 +3,7 @@ fs.writeFileSync('.qa/review-console.mjs',ts.transpileModule(fs.readFileSync('ap
 const {default:Panel}=await import('../.qa/review-console.mjs');globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const calls=[];let rows=['01','02'].map(day=>({date:'2031-01-'+day,author_name:'OF TESTE',version:3,status:'Assinado',group:'ready',reasons:[],dependencies:[{id:'nautica',name:'Náutica',complete:true,version:2}]}));
 globalThis.fetch=async(url,options)=>{calls.push([url,options]);if(options?.method==='POST'){const b=JSON.parse(options.body);assert.equal(b.version,3);assert.equal(b.password,'secret');rows=rows.map(r=>r.date===b.date?{...r,group:'reviewed'}:r);return Response.json({ok:true});}return url.includes('reviewQueue')?Response.json(rows):new Response('pdf',{headers:{'Content-Type':'application/pdf'}});};
-let root;const settle=()=>new Promise(r=>setTimeout(r,0));await act(async()=>{root=create(React.createElement(Panel));await settle();});
+let root;const settle=()=>new Promise(r=>setTimeout(r,0));await act(async()=>{root=create(React.createElement(Panel,{canReview:true}));await settle();});
 const button=label=>root.root.findAllByType('button').find(b=>b.children.join('')===label);
 await act(async()=>{button('Abrir livro').props.onClick();await settle();});
 assert.ok(calls.some(([url])=>url.includes('op=pdf&date=2031-01-01&version=3')));
@@ -15,3 +15,9 @@ await act(async()=>{root.root.findByType('form').props.onSubmit({preventDefault(
 assert.equal(calls.filter(([,o])=>o?.method==='POST').length,1);
 assert.ok(JSON.stringify(root.toJSON()).includes('Fim da fila'));
 await act(()=>root.unmount());console.log('PASS SUBCMT UI: exact version PDF; skip; individual password; next queue; no batch review.');
+
+await act(async()=>{root=create(React.createElement(Panel,{canReview:false}));await settle();});
+await act(async()=>{button('Abrir livro').props.onClick();await settle();});
+assert.equal(button('Conferir e abrir próximo'),undefined);
+assert.equal(root.root.findAllByProps({type:'password'}).length,0);
+await act(()=>root.unmount());console.log('PASS admin review console: read-only access without signature controls.');
