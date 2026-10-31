@@ -1,0 +1,11 @@
+const location={latitude:-23.02,longitude:-43.36,name:'Praia da Barra da Tijuca'};
+export function compass(value:unknown){return typeof value==='number'&&Number.isFinite(value)?['N','NE','L','SE','S','SO','O','NO'][Math.round(((value%360+360)%360)/45)%8]:'';}
+export function forecastRows(date:string,atmosphere:any,waves:any){return ['09:00','15:00'].map((hour,i)=>{const a=atmosphere?.hourly?.time?.indexOf(date+'T'+hour)??-1,w=waves?.hourly?.time?.indexOf(date+'T'+hour)??-1;const val=(v:any)=>typeof v==='number'&&Number.isFinite(v)?String(Math.round(v*10)/10):'';return {period:i?'Tarde':'Manhã',hour,wave:val(waves?.hourly?.wave_height?.[w]),current:'',wind:compass(atmosphere?.hourly?.wind_direction_10m?.[a]),air:val(atmosphere?.hourly?.temperature_2m?.[a]),water:''};});}
+export async function supervisorForecast(date:string){
+ const query=new URLSearchParams({latitude:String(location.latitude),longitude:String(location.longitude),start_date:date,end_date:date,timezone:'America/Sao_Paulo'});
+ const fetchJson=async(url:string)=>{const r=await fetch(url,{signal:AbortSignal.timeout(12000),next:{revalidate:1800}});if(!r.ok)throw Error('Previsão indisponível para a data.');return r.json();};
+ const results=await Promise.allSettled([fetchJson('https://api.open-meteo.com/v1/gfs?'+query+'&hourly=temperature_2m,wind_direction_10m'),fetchJson('https://marine-api.open-meteo.com/v1/marine?'+query+'&hourly=wave_height&models=ncep_gfswave025&cell_selection=sea')]);
+ const a=results[0].status==='fulfilled'?results[0].value:null,w=results[1].status==='fulfilled'?results[1].value:null;
+ const weather=forecastRows(date,a,w),found=weather.some(r=>r.wave||r.air||r.wind);
+ return {found,weather,source:{date,queriedAt:new Date().toISOString(),location,atmosphere:a?'NOAA GFS via Open-Meteo':null,waves:w?'NOAA GFS Wave via Open-Meteo':null,grid:a?{latitude:a.latitude,longitude:a.longitude}:null,waveGrid:w?{latitude:w.latitude,longitude:w.longitude}:null,url:'https://open-meteo.com/en/docs/gfs-api',waveUrl:'https://open-meteo.com/en/docs/marine-weather-api'},message:found?'Estimativa do modelo para 09h e 15h. Confira na praia. Corrente local e temperatura da água devem ser informadas pelo supervisor.':'Não foi possível importar a previsão desta data. Preencha manualmente.'};
+}

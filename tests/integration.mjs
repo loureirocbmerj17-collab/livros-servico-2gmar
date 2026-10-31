@@ -1,7 +1,7 @@
 import ts from 'typescript';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {PGlite} from '@electric-sql/pglite';import {PDFDocument} from 'pdf-lib';
 const qa=path.resolve('.qa');fs.mkdirSync(qa,{recursive:true});
 function compile(source,dest){fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
-for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
+for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
 compile(fs.readFileSync('lib/database.ts','utf8'),'database');compile(fs.readFileSync('lib/storage.ts','utf8'),'storage');
 const {folderFiles,matchesDay,newestScale,driveFileTimes}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
 assert.deepEqual(folderFiles('<tr data-id="doc123"><td aria-label="27 DE OUTUBRO Google Docs Shared"></td></tr><tr data-id="pdf123"><td aria-label="28 DE OUTUBRO.pdf Shared"></td></tr>'),[{id:'doc123',name:'27 DE OUTUBRO',type:'doc'},{id:'pdf123',name:'28 DE OUTUBRO.pdf',type:'pdf'}]);
@@ -19,6 +19,7 @@ assert.equal(driveFileTimes("window['_DRIVE_ivd'] = '"+driveMetadata+"';").get('
 const sql=new PGlite();await sql.exec(fs.readFileSync('supabase/schema.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/access-rules.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/nautica.sql','utf8'));await sql.exec(fs.readFileSync('supabase/ssmt.sql','utf8'));
+await sql.exec(fs.readFileSync('supabase/migrations/20261031011506_supervisor_book.sql','utf8'));
 const {createDatabase}=await import(pathToFileURL(path.join(qa,'database.mjs')));
 const client={async query(q,values){const r=await sql.query(q,values);return {rows:r.rows,rowCount:r.affectedRows??r.rows.length}},release(){}};
 globalThis.testDb=createDatabase(()=>({...client,async connect(){return client}}));
@@ -37,7 +38,7 @@ await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,pa
 await post('user',{rg:'99996',name:'TESTE PRACA',role:'enlisted',active:true,password});await post('login',{rg:'0099996',password});for(const op of ['list','book','pdf','monthPdf','history','users','dependencies'])assert.equal((await get('op='+op+'&date=2026-10-23')).status,403);await post('save',{},403);await post('resolveAssignment',{},403);
 await post('login',{rg:'99998',password:'wrong'},401);await post('login',{rg:'99998',password});
 const drawing=JSON.stringify({width:600,height:180,strokes:[[[10,80],[50,40],[80,90],[100,30],[130,70],[200,60],[300,80],[500,50]]]});
-assert.equal((await get('op=monthPdf&type=supervisor&month=2026-10')).status,400);
+assert.equal((await get('op=monthPdf&type=supervisor&month=2026-10')).status,404);
 const data=blank('2026-10-23');assert.equal(data.divers,'Não');assert.equal(data.riders,'Não');assert.deepEqual(data.support,Array(8).fill('0'));Object.assign(data,{crew:['OFICIAL DE TESTE RG 99998',...Array(11).fill(''),'MOTORISTA TESTE ASE','MOTORISTA TESTE AR'],activation:'07:00',deactivation:'18:05',prevention:['96','45','20','1'],rescues:Array(4).fill('0'),physical:Array(4).fill(''),forms:Array(4).fill('')});const date=data.date;
 await post('save',{date,version:0,data});await post('sign',{date,version:1,data,password},400);await post('sign',{date,version:1,data:{...data,crew:['OUTRO RG 99997',...data.crew.slice(1)]},password,drawing},403);globalThis.scaleCrew=null;await post('sign',{date,version:1,data,password,drawing},403);await post('resolveAssignment',{date,password,reason:'Permuta autorizada para assumir este serviço.'});await post('sign',{date,version:1,data,password,drawing});assert.match((await sql.query('SELECT data FROM livros.books WHERE date=$1',[date])).rows[0].data,/Permuta autorizada/);await assert.rejects(sql.query('DELETE FROM livros.assignment_events'));
 await post('save',{date,version:1,data},409);await post('save',{date,version:2,data});await post('sign',{date,version:3,data,password,drawing});
@@ -72,4 +73,5 @@ await post('login',{rg:'99998',password});
 for(const [type,day] of [['pdf','2026-10-23'],['nauticalPdf','2026-11-02'],['ssmtPdf','2026-12-12']]){const r=await get('op='+type+'&date='+day+'&version=1');assert.equal(r.status,200);assert.ok((await r.arrayBuffer()).byteLength>1000);}
 await assert.rejects(sql.query("UPDATE livros.revisions SET pdf='payload'"));
 console.log('PASS data-only migration: exact preservation of all data/signatures/history; zero PDF bytes; downloads from stored data.');
+await import('./supervisor-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
 await sql.close();
