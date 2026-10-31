@@ -3,6 +3,8 @@ export const roles=['Of. de Dia e Cmt. Op.','Of. de RAS – 2º GMAR','Of. de RA
 export const support=['PMERJ','PCERJ','Marinha do Brasil','GOA','GBS','Capitania dos Portos','Guarda Municipal','CET-Rio'];
 export const sections=['Início e importação','Ala de serviço','Ativação e apoio','Estatísticas','Alterações de pessoal','Ordens e meios','Ocorrências e assinatura'];
 export function blank(date:string){return {date,endDate:nextDay(date),crew:roles.map(()=>''),activation:'',deactivation:'',weather:'',divers:'Não',riders:'Não',support:support.map(()=>'0'),prevention:units.map(()=>''),rescues:units.map(()=>''),physical:units.map(()=>''),forms:units.map(()=>''),topPrevention:'',topPreventionCount:'',topRescue:'',topRescueCount:'',personnel:'',absences:'',orders:'',vehicles:'',boats:'',occurrences:'',notes:'',sourceMessage:''};}
+// A escala tem funções que não pertencem ao livro do Oficial (ex.: Encarregado de motoristas, índice 14).
+export function crewFromScale(crew:unknown):string[]{const list=Array.isArray(crew)?crew:[];return roles.map((_,i)=>typeof list[i]==='string'?list[i]:'');}
 export function nextDay(date:string){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10);}
 export function parseMessage(raw:string){
  const text=raw.replace(/\*/g,'').replace(/\r/g,'');const warnings:string[]=[];const patch:any={sourceMessage:raw};

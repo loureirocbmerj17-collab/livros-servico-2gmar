@@ -66,5 +66,9 @@ export async function run({post,get,sql,drawing,password,qa}){
  await post('login',{rg:'99997',password});await post('nauticalChiefReview',{date:manualDate,version:2,password,drawing});
  await post('login',{rg:'99996',password});await post('nauticalManualRoster',{...request,version:3},409);
  await post('login',{rg:'99998',password});await post('nauticalReview',{date:manualDate,version:3,password,drawing});
+ const gas=JSON.parse(record.data).stock.find(s=>s.fuel==='Gasolina');assert.equal(gas.incoming,'60');assert.equal(gas.outgoing,'0');
+ await post('login',{rg:'99999',password});await post('nauticalEquipmentSave',{prefix:'BIR-SEM-LEITURA',kind:'BIR',active:true,initial_data:{}});
+ await post('login',{rg:'99996',password});const fresh=(await (await get('op=nauticalContext&date=2026-11-20')).json()).blank.inventory.find(i=>i.prefix==='BIR-SEM-LEITURA');assert.equal(fresh.hours,'');assert.equal(fresh.previousHours,'');assert.equal(fresh.condition,'');
+ console.log('PASS Náutica: external refuel does not reduce unit stock; equipment without reading starts blank.');
  console.log('PASS Náutica: rank labels; 24h roster; admin equipment; author/scale/signature checks; audited override; immutable snapshots; re-sign after edits; purchase deduplication; carry-forward; officer attestation; locking; monthly PDF; enlisted restrictions.');
 }

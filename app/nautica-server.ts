@@ -1,4 +1,4 @@
-import {nauticalBlank,validateNautical,stockEnd,equipmentKinds,operationalStockEquipment} from './nautica-model';
+import {nauticalBlank,validateNautical,stockEnd,stockMovements,equipmentKinds,operationalStockEquipment} from './nautica-model';
 import {assignmentRg,normalizeRg,nauticalAssignments} from './service-policy';
 import {personLabel} from './person-label';
 import {readDrawing} from './handwriting';
@@ -21,7 +21,7 @@ export async function nauticalGet(op:string,u:any,url:URL,c:Context){
  if(op==='nauticalContext'){
  const [r,equipment,previous,monthPurchases]=await Promise.all([roster(c,date),results(c.db,'SELECT * FROM livros.nautical_equipment WHERE active=true ORDER BY prefix'),one(c.db,"SELECT date,data FROM livros.nautical_books WHERE date<? AND status IN ('Assinado','Conferido') ORDER BY date DESC LIMIT 1",date),purchaseMonth(c,date)]);
  const latest=await one(c.db,'SELECT data FROM livros.nautical_books WHERE date<? ORDER BY date DESC LIMIT 1',date);const latestInventory=latest?JSON.parse(latest.data).inventory:[];
- const d=nauticalBlank(date),prev=previous?JSON.parse(previous.data):null;d.operators=r.operators;(d as any).dayCrew=(r as any).dayCrew||[];d.inventory=equipment.map((e:any)=>{const old=prev?.inventory.find((i:any)=>i.id===e.id)||e.initial_data;return {id:e.id,prefix:e.prefix,kind:e.kind,condition:old?.condition||'',location:old?.location||'Galpão Náutica',hours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',previousHours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',unavailable:!!old?.unavailable,unavailableReason:old?.unavailableReason||'',note:old?.note||''}});if(prev){d.carryDate=previous.date;d.changes=prev.changes.filter((r:any)=>r.status==='Pendente');d.stock=prev.stock.map((s:any)=>({fuel:s.fuel,initial:String(stockEnd(s)),incoming:'0',outgoing:'0'}));}return {roster:r,blank:d,monthPurchases};
+ const d=nauticalBlank(date),prev=previous?JSON.parse(previous.data):null;d.operators=r.operators;(d as any).dayCrew=(r as any).dayCrew||[];d.inventory=equipment.map((e:any)=>{const old=prev?.inventory.find((i:any)=>i.id===e.id)||e.initial_data;return {id:e.id,prefix:e.prefix,kind:e.kind,condition:old?.condition||'',location:old?.location||'Galpão Náutica',hours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'',previousHours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'',unavailable:!!old?.unavailable,unavailableReason:old?.unavailableReason||'',note:old?.note||''}});if(prev){d.carryDate=previous.date;d.changes=prev.changes.filter((r:any)=>r.status==='Pendente');d.stock=prev.stock.map((s:any)=>({fuel:s.fuel,initial:String(stockEnd(s)),incoming:'0',outgoing:'0'}));}return {roster:r,blank:d,monthPurchases};
  }
  const book=await one(c.db,'SELECT * FROM livros.nautical_books WHERE date=?',date);
  // Single-day nautical consultation is available to the unit; bulk lists remain restricted.
@@ -71,7 +71,7 @@ export async function nauticalPost(op:string,u:any,b:any,c:Context){
  if(review&&(u.role==='enlisted'||!old||old.status!=='Assinado'||old.author===u.rg))fail('O visto exige outro militar, Oficial de Dia, e livro assinado.',403);
  if(review&&!JSON.parse(old.review||'{}').chief)fail('Aguarde a conferência do Chefe de Náutica.',409);
  let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');
- if(!review&&d&&Array.isArray(d.stock)&&Array.isArray(d.purchases)&&Array.isArray(d.refuels))d={...d,stock:d.stock.map((s:any)=>({...s,incoming:String(d.purchases.filter((r:any)=>r.fuel===s.fuel).reduce((n:number,r:any)=>n+Number(r.liters||0),0)),outgoing:String(d.refuels.filter((r:any)=>r.fuel===s.fuel).reduce((n:number,r:any)=>n+Number(r.liters||0),0))}))};
+ if(!review&&d&&Array.isArray(d.stock)&&Array.isArray(d.purchases)&&Array.isArray(d.refuels))d={...d,stock:stockMovements(d)};
  if(!review){d={...d};for(const key of ['radios','chargers','covers'])if(d[key]===undefined||d[key]===null||d[key]==='')d[key]='0';}
  const errors=validateNautical(d,sign);if(errors.length)fail(errors.join(' '));
  const events=await results(db,'SELECT * FROM livros.assignment_events WHERE date=? AND book_type=? AND actor=? ORDER BY id',b.date,review?'officer':'nautica',u.rg);
