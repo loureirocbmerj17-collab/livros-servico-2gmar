@@ -8,10 +8,10 @@ const d={...c.blank,responsible:'99996',confirmed:true};d.inventory=d.inventory.
 d.inventory=d.inventory.map(v=>({...v,driver:''}));d.refuels=[{invalid:true}];
 await post('ssmtSave',{date,version:0,data:d});const next=await(await get('op=ssmtContext&date=2026-12-13')).json();assert.equal(next.blank.inventory[0].hours,'100');assert.equal(next.blank.inventory[0].condition,'OP');await post('ssmtSign',{date,version:1,data:d,password,drawing});
 assert.equal((await get('op=monthPdf&type=ssmt&month=2026-12')).status,403);
-await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:2,password,drawing},409);
-await post('login',{rg:'99997',password});await post('ssmtChiefReview',{date,version:2,password,drawing});
+await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:2,password,drawing});const first=(await sql.query('SELECT * FROM livros.ssmt_books WHERE date=$1',[date])).rows[0];assert.equal(first.status,'Assinado');assert.equal(JSON.parse(first.review).rg,'99998');await post('ssmtReview',{date,version:3,password,drawing},409);
+await post('login',{rg:'99997',password});await post('ssmtChiefReview',{date,version:2,password,drawing},409);await post('ssmtChiefReview',{date,version:3,password,drawing});
 await post('login',{rg:'99996',password});await post('ssmtSave',{date,version:3,data:d},409);
-await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:3,password,drawing});
+await post('login',{rg:'99998',password});await post('ssmtReview',{date,version:4,password,drawing},409);
 const row=(await sql.query('SELECT * FROM livros.ssmt_books WHERE date=$1',[date])).rows[0];assert.equal(row.status,'Conferido');fs.writeFileSync(path.join(qa,'ssmt-daily.pdf'),new Uint8Array(await (await get('op=ssmtPdf&date='+date)).arrayBuffer()));
 assert.equal((await get('op=monthPdf&type=ssmt&month=2026-12')).status,200);
 await post('login',{rg:'99996',password});assert.equal((await(await get('op=ssmtList')).json()).length,1);const overview=await(await get('op=operationalOverview')).json();assert.equal(overview.ssmt.date,date);assert.equal(overview.ssmt.inventory[0].sisgeo,true);
