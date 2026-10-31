@@ -1,3 +1,4 @@
+import {manualPersonnel} from './manual-personnel';
 import {supervisorBlank,validateSupervisor} from './supervisor-model';
 import {supervisorForecast} from './supervisor-weather';
 import {assignmentRg} from './service-policy';
@@ -47,11 +48,12 @@ export async function supervisorPost(op:string,u:any,b:any,c:Context){
  if(!review){if((!old||sign)&&r.responsible!==u.rg&&!events.length)fail('Seu RG deve constar como Supervisor na escala. Use Solucionar responsabilidade.',403);
  d=JSON.parse(JSON.stringify(d));delete d.signatureDrawing;delete d.assignmentAudit;delete d.personnel;delete d.scaleSource;
  d.officerRg=r.officerRg;d.scaleSource=r.source;
+ const manual=manualPersonnel(d);d.manualPersonnel=manual;
  const people=await rows(db,'SELECT rg,name,rank FROM users WHERE active=1');
  const referenced=new Set([d.responsible,d.officerRg,...d.posts.flatMap((p:any)=>p.rgs),...d.late.map((p:any)=>p.rg),...d.absent.map((p:any)=>p.rg)].filter(Boolean));
  const imported=new Set(r.posts.flatMap((p:any)=>p.rgs));const prior=new Set(old?JSON.parse(old.data).posts.flatMap((p:any)=>p.rgs):[]);
- for(const rg of referenced)if(!people.some((p:any)=>p.rg===rg)&&!imported.has(rg)&&!prior.has(rg))fail('RG '+rg+' não está ativo no cadastro. Corrija antes de salvar.');
- d.personnel=people.filter((p:any)=>referenced.has(p.rg)).map((p:any)=>({rg:p.rg,name:personLabel(p)}));
+ for(const rg of referenced)if(!people.some((p:any)=>p.rg===rg)&&!imported.has(rg)&&!prior.has(rg)&&!(rg!==d.responsible&&rg!==d.officerRg&&manual.some((p:any)=>p.rg===rg)))fail('RG '+rg+' não está ativo no cadastro. Corrija antes de salvar.');
+ d.personnel=[...people.filter((p:any)=>referenced.has(p.rg)).map((p:any)=>({rg:p.rg,name:personLabel(p)})),...manual.filter((p:any)=>referenced.has(p.rg)&&!people.some((u:any)=>u.rg===p.rg))];
  d.assignmentAudit=events.map((e:any)=>`${e.created_at} | RG ${e.actor} | Antes: ${e.previous_assignment} | Responsável: ${e.replacement} | Motivo: ${e.reason}`).join('\n');
  }
  if(sign||review){if(!await c.check(String(b.password||''),u.password))fail('Senha incorreta.',401);if(!readDrawing(b.drawing))fail('Desenhe sua assinatura.');if(sign){if(d.responsible!==u.rg)fail('O responsável deve ser o usuário autenticado.',403);d.signatureDrawing=b.drawing;}else{const ob=await one(db,'SELECT author FROM books WHERE date=?',b.date);if(ob&&ob.author!==u.rg)fail('O visto pertence ao autor do Livro do Oficial de Dia.',403);if(r.officerRg!==u.rg&&!events.length)fail('Seu RG não consta como Oficial de Dia. Registre a substituição justificada.',403);}}

@@ -1,7 +1,7 @@
 import ts from 'typescript';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {PGlite} from '@electric-sql/pglite';import {PDFDocument} from 'pdf-lib';
 const qa=path.resolve('.qa');fs.mkdirSync(qa,{recursive:true});
 function compile(source,dest){fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
-for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale','adjunto-model','adjunto-server','adjunto-pdf'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
+for(const n of ['mail-service','account-server','manual-personnel','notifications','book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale','adjunto-model','adjunto-server','adjunto-pdf'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
 compile(fs.readFileSync('lib/database.ts','utf8'),'database');compile(fs.readFileSync('lib/storage.ts','utf8'),'storage');
 const {folderFiles,matchesDay,newestScale,driveFileTimes}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
 assert.deepEqual(folderFiles('<tr data-id="doc123"><td aria-label="27 DE OUTUBRO Google Docs Shared"></td></tr><tr data-id="pdf123"><td aria-label="28 DE OUTUBRO.pdf Shared"></td></tr>'),[{id:'doc123',name:'27 DE OUTUBRO',type:'doc'},{id:'pdf123',name:'28 DE OUTUBRO.pdf',type:'pdf'}]);
@@ -20,6 +20,7 @@ const sql=new PGlite();await sql.exec(fs.readFileSync('supabase/schema.sql','utf
 await sql.exec(fs.readFileSync('supabase/access-rules.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/nautica.sql','utf8'));await sql.exec(fs.readFileSync('supabase/ssmt.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/migrations/20261031011506_supervisor_book.sql','utf8'));
+await sql.exec(fs.readFileSync('supabase/migrations/20261031180758_account_mail_notifications.sql','utf8').replace(',anon,authenticated',''));
 const {createDatabase}=await import(pathToFileURL(path.join(qa,'database.mjs')));
 const client={async query(q,values){const r=await sql.query(q,values);return {rows:r.rows,rowCount:r.affectedRows??r.rows.length}},release(){}};
 globalThis.testDb=createDatabase(()=>({...client,async connect(){return client}}));
@@ -28,11 +29,13 @@ globalThis.scaleCrew=['CAP RG 99998 TESTE'];
 compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew,adjunto:globalThis.scaleAdjunto||''}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("from '../../../lib/storage'","from './storage'").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
 const {POST,GET}=await import(pathToFileURL(path.join(qa,'route.mjs')));const {blank}=await import(pathToFileURL(path.join(qa,'book-model.mjs')));
 let cookie='';const password='Test-password-42!',setupToken='TEST-ONLY-INITIAL-SETUP-CODE-32-CHARS';process.env.SETUP_TOKEN=setupToken;
-async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];return v}
+async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];if(status===200&&op==='user')await sql.query("UPDATE livros.users SET email=rg||'@example.test' WHERE rg=$1",[String(data.rg)]);return v}
 const get=(params,session=cookie)=>GET(new Request('https://test.local/api/service?'+params,{headers:{cookie:session}}));
 assert.equal((await get('op=monthPdf&month=2026-10','')).status,401);
 await post('setup',{rg:'99999',name:'TESTE ADMIN',password},403);
 await post('setup',{rg:'99999',name:'TESTE ADMIN',password,setupToken});
+assert.equal((await get('op=list')).status,428);
+await post('profile',{rg:'99999',current:password,password,email:'admin@example.test'});
 await post('setup',{rg:'88888',name:'OUTRO ADMIN',password,setupToken},409);
 await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,password});await post('user',{rg:'99997',name:'TESTE SUBCMT',role:'reviewer',active:true,password});
 await post('user',{rg:'99996',name:'TESTE PRACA',role:'enlisted',active:true,password});await post('login',{rg:'0099996',password});for(const op of ['list','book','pdf','monthPdf','history','users','dependencies'])assert.equal((await get('op='+op+'&date=2026-10-23')).status,403);await post('save',{},403);await post('resolveAssignment',{},403);
@@ -78,4 +81,6 @@ await sql.exec(fs.readFileSync('supabase/migrations/20261031091146_adjunto_book.
 await import('./adjunto-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
 await import('./independent-reviews.mjs').then(m=>m.run({post,sql,password,drawing}));
 await import('./review-queue.mjs').then(m=>m.run({post,get,sql,password}));
+await import('./form-audit.mjs').then(m=>m.run({post,get,sql,password,drawing}));
+await import('./account-notifications.mjs').then(m=>m.run({post,get,sql,password,qa}));
 await sql.close();

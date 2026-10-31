@@ -26,3 +26,5 @@ button.primary:hover{background:#821a22;border-color:#821a22}button:hover,a.butt
 .review-queue-card{border:1px solid #dce3ed;border-radius:12px;padding:20px;margin:18px 0}
 .review-pdf{display:block;width:100%;height:75vh;min-height:420px;border:1px solid #dce3ed;margin-top:16px;background:#f4f5f8}
 .review-actions button[aria-pressed=true]{border-color:#b18b43;box-shadow:0 0 0 1px #b18b43}
+
+.yes-no{display:flex;gap:8px;margin-top:8px}.yes-no button{flex:1;min-height:44px}.yes-no button[aria-pressed=true]{background:#12334e;color:white;border-color:#b18b43}.military-picker{display:grid;gap:8px;margin-top:8px}

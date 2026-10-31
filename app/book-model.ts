@@ -21,10 +21,10 @@ export function lines(d:any){const total=(a:any[])=>a?.some(v=>v==='')?'Não inf
 '4. ESTATÍSTICA - PREVENÇÕES',...units.map((u,i)=>u+': '+(d.prevention?.[i]??'')),`Total: ${total(d.prevention)}`,'',
 '5. SOCORROS',...units.map((u,i)=>u+': '+(d.rescues?.[i]??'')),`Total: ${total(d.rescues)}`,'',
 '6. POSTOS COM MAIORES QUANTITATIVOS',`Prevenções: ${d.topPrevention||'Não informado'} | Quantidade: ${d.topPreventionCount}`,`Socorros: ${d.topRescue||'Não informado'} | Quantidade: ${d.topRescueCount}`,'',
-'7. ALTERAÇÕES DE PESSOAL 1 (LICENCIADO / DISPENSADO / PRESO / DETIDO)',d.personnel||'Não informado','',
-'8. ALTERAÇÕES DE PESSOAL 2 (NOME, RG, FALTAS, ATRASOS, OBSERVAÇÕES)',d.absences||'Não informado','',
+'7. ALTERAÇÕES DE PESSOAL 1 (LICENCIADO / DISPENSADO / PRESO / DETIDO)',d.personnel||'Sem alterações','',
+'8. ALTERAÇÕES DE PESSOAL 2 (NOME, RG, FALTAS, ATRASOS, OBSERVAÇÕES)',d.absences||'Sem alterações','',
 '9. ORDENS EM VIGOR',d.orders||'Não informado','',
-'10. ALTERAÇÕES COM VIATURAS',d.vehicles||'Não informado','',
-'11. ALTERAÇÕES COM EMBARCAÇÕES',d.boats||'Não informado','',
-'12. OCORRÊNCIAS (DESAPARECIDOS, ÓBITOS E OUTROS SOCORROS)',d.occurrences||'Não informado','',
-'13. OUTRAS OBSERVAÇÕES',d.notes||'Não informado'];}
+'10. ALTERAÇÕES COM VIATURAS',d.vehicles||'Sem alterações','',
+'11. ALTERAÇÕES COM EMBARCAÇÕES',d.boats||'Sem alterações','',
+'12. OCORRÊNCIAS (DESAPARECIDOS, ÓBITOS E OUTROS SOCORROS)',d.occurrences||'Sem alterações','',
+'13. OUTRAS OBSERVAÇÕES',d.notes||'Sem alterações'];}
