@@ -31,9 +31,9 @@ export async function run({post,get,sql,drawing,password,qa}){
  await post('nauticalSign',{date,version:3,data,password,drawing});
  await post('nauticalReview',{date,version:4,password,drawing},403);
  const context2=await (await get('op=nauticalContext&date=2026-11-03')).json();assert.equal(context2.blank.carryDate,date);assert.equal(context2.blank.changes.length,1);assert.equal(context2.monthPurchases.length,1);
- await post('login',{rg:'99997',password});await post('nauticalSave',{date,version:4,data},403);await post('nauticalReview',{date,version:4,password,drawing},409);
+ await post('login',{rg:'99997',password});await post('nauticalSave',{date,version:4,data},403);await post('nauticalReview',{date,version:4,password,drawing},403);
  await post('login',{rg:'99998',password});globalThis.scaleCrew=Array(14).fill('');globalThis.scaleCrew[0]='CAP RG 99998 OFICIAL';globalThis.scaleCrew[8]='CB RG 99996 NAUTICO';globalThis.scaleCrew[6]='MAJ RG 99997 MEDICO';globalThis.scaleCrew[3]='SGT RG 99999 OUTRO';
- await post('nauticalReview',{date,version:4,password,drawing},409);await sql.query("INSERT INTO livros.settings(key,value) VALUES('nauticalChief','99997')");await post('login',{rg:'99997',password});await post('nauticalChiefReview',{date,version:4,password,drawing});await post('login',{rg:'99998',password});await post('nauticalReview',{date,version:5,password,drawing});
+ await sql.query("INSERT INTO livros.settings(key,value) VALUES('nauticalChief','99997')");await post('login',{rg:'99997',password});await post('nauticalChiefReview',{date,version:4,password,drawing});await post('login',{rg:'99998',password});await post('nauticalReview',{date,version:5,password,drawing});
  const record=(await sql.query('SELECT * FROM livros.nautical_books WHERE date=$1',[date])).rows[0];assert.equal(record.status,'Conferido');assert.equal(JSON.parse(record.review).rg,'99998');assert.equal(JSON.parse(record.review).drawing,drawing);
  att=(await sql.query("SELECT * FROM livros.service_attestations WHERE date=$1 AND book_type='nautica'",[date])).rows[0];assert.equal(att.officer_rg,'99998');assert.ok(att.officer_signature);assert.equal(att.version,6);
  await post('nauticalReview',{date,version:5,password,drawing},409);

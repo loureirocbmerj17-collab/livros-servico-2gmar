@@ -62,3 +62,10 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Migração 20261031091146_adjunto_book.sql aplicada como adjunto_book: schema privado livros, RLS, histórico imutável, CHECK(pdf='') herdado e service_attestations. Schema public preservado.
 - Testes dos cinco livros e testes de UI aprovados; build aprovado. PDF sintético de quatro páginas revisado visualmente. Nenhum livro fictício em produção.
 - Todos os quatro livros secundários agora possuem implementação. Conferência do Major continua exigindo as quatro atestações do Oficial do mesmo dia.
+
+
+## Conferências independentes — 31/10/2026
+- Náutica e SSMT: chefe e Oficial de Dia podem conferir em qualquer ordem após a assinatura do autor. A primeira conferência trava a edição do conteúdo; somente a outra assinatura pode ser acrescentada.
+- Situação permanece Assinado com uma conferência e passa a Conferido com ambas. A assinatura existente é preservada, inclusive na ordem Oficial -> Chefe. Não há migração nem alteração de registros existentes.
+- A dependência para conferência do Major exige as duas conferências em Náutica/SSMT, além do RG correto do Oficial. Supervisor e Adjunto continuam com o visto do Oficial.
+- Testes tests/independent-reviews.mjs cobrem as duas ordens nos dois livros, preservação de dados/assinaturas, duplicidade, versões concorrentes, bloqueio e dependências.

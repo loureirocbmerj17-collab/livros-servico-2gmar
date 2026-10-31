@@ -41,7 +41,7 @@ export async function ssmtPost(op:string,u:any,b:any,c:Context){
  validDate(b.date);const old=await one(db,'SELECT * FROM livros.ssmt_books WHERE date=?',b.date);
  if(old?.status==='Conferido')fail('Livro conferido pelo Oficial de Dia e bloqueado.',409);
  if(op==='ssmtManualRoster'){
- if(old?.review)fail('Conferência do Chefe registrada: edição bloqueada.',409);
+ if(old?.review)fail('Conferência registrada: edição bloqueada.',409);
  if(old&&old.author!==u.rg)fail('Somente o autor pode preencher a escala manual.',403);
  if((old?.version||0)!==b.version)fail('Reabra o livro atualizado.',409);
  const reason=String(b.reason||'').trim();if(reason.length<20||reason.length>1500)fail('Informe justificativa de 20 a 1500 caracteres.');if(!await c.check(String(b.password||''),u.password))fail('Senha incorreta.',401);
@@ -62,13 +62,13 @@ export async function ssmtPost(op:string,u:any,b:any,c:Context){
  const reason=String(b.reason||'').trim();if(reason.length<20||reason.length>1500)fail('Informe justificativa de 20 a 1500 caracteres.');if(!await c.check(String(b.password||''),u.password))fail('Senha incorreta.',401);
  const r=await roster(c,b.date);const replacement=`${personLabel(u)} RG ${u.rg}`;await db.prepare('INSERT INTO livros.assignment_events(date,book_type,actor,previous_assignment,replacement,reason,created_at) VALUES(?,?,?,?,?,?,?)').bind(b.date,kind,u.rg,kind==='officer'?r.officerRg||'Escala indisponível':r.operators.map((p:any)=>p.name+' RG '+p.rg).join('; ')||'Escala indisponível',replacement,reason,now).run();return {operator:{rg:u.rg,name:personLabel(u),hours:24},replacement};
  }
- if(op==='ssmtChiefReview'){if(!u.ssmt_chief||!old||old.status!=='Assinado'||old.author===u.rg)fail('Conferência restrita ao Chefe de SSMT, em livro assinado por outro motorista.',403);if(old.version!==b.version)fail('Reabra o livro atualizado.',409);if(old.review)fail('Conferência já registrada.',409);if(!await c.check(String(b.password||''),u.password)||!readDrawing(b.drawing))fail('Confirme senha e assinatura manuscrita.',401);const chief={rg:u.rg,name:personLabel(u),at:now,drawing:b.drawing,attestation:`${personLabel(u)} - RG ${u.rg} | ${now} | SHA-256 ${await c.hash(old.data)}`};const next={...old,version:old.version+1,review:JSON.stringify({chief}),actor:u.rg,updated:now};next.pdf='';const r=await db.prepare('UPDATE livros.ssmt_books SET version=?,review=?,actor=?,updated=?,pdf=? WHERE date=? AND version=?').bind(next.version,next.review,u.rg,now,next.pdf,b.date,b.version).run();if(!r.meta.changes)fail('Versão alterada.',409);return {ok:true};}
- if(old?.review&&op!=='ssmtReview')fail('Conferência do Chefe registrada: edição bloqueada.',409);
+ if(op==='ssmtChiefReview'){if(!u.ssmt_chief||!old||old.status!=='Assinado'||old.author===u.rg)fail('Conferência restrita ao Chefe de SSMT, em livro assinado por outro motorista.',403);if(old.version!==b.version)fail('Reabra o livro atualizado.',409);if(JSON.parse(old.review||'{}').chief)fail('Conferência do chefe já registrada.',409);if(!await c.check(String(b.password||''),u.password)||!readDrawing(b.drawing))fail('Confirme senha e assinatura manuscrita.',401);const chief={rg:u.rg,name:personLabel(u),at:now,drawing:b.drawing,attestation:`${personLabel(u)} - RG ${u.rg} | ${now} | SHA-256 ${await c.hash(old.data)}`};const next={...old,version:old.version+1,status:JSON.parse(old.review||'{}').rg?'Conferido':'Assinado',review:JSON.stringify({...JSON.parse(old.review||'{}'),chief}),actor:u.rg,updated:now};next.pdf='';const r=await db.prepare('UPDATE livros.ssmt_books SET version=?,status=?,review=?,actor=?,updated=?,pdf=? WHERE date=? AND version=?').bind(next.version,next.status,next.review,u.rg,now,next.pdf,b.date,b.version).run();if(!r.meta.changes)fail('Versão alterada.',409);return {ok:true};}
+ if(old?.review&&op!=='ssmtReview')fail('Conferência registrada: edição bloqueada.',409);
  if(!['ssmtSave','ssmtSign','ssmtReview'].includes(op))fail('Operação desconhecida.');
  if(old&&old.version!==b.version||!old&&b.version!==0)fail('A versão mudou. Reabra o livro.',409);
  const review=op==='ssmtReview',sign=op==='ssmtSign';if(!review&&old&&old.author!==u.rg)fail('Somente quem confeccionou pode retificar.',403);
  if(review&&(u.role==='enlisted'||!old||old.status!=='Assinado'||old.author===u.rg))fail('O visto exige outro militar, Oficial de Dia, e livro assinado.',403);
- if(review&&!JSON.parse(old.review||'{}').chief)fail('Aguarde a conferência do Chefe de SSMT.',409);
+ if(review&&JSON.parse(old.review||'{}').rg)fail('Visto do Oficial de Dia já registrado.',409);
  let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');
  if(!review)d={...d,activations:[],refuels:[],purchases:[],stock:[],changes:[],occurrences:[],sisgeoResponsible:''};
  const errors=validateSsmt(d,sign);if(errors.length)fail(errors.join(' '));
@@ -89,7 +89,7 @@ export async function ssmtPost(op:string,u:any,b:any,c:Context){
  }
  const version=(old?.version||0)+1;const attestation=`${personLabel(u)} - RG ${u.rg} | ${now} | SHA-256 ${await c.hash(JSON.stringify(d))}`;
  const reviewValue=review?JSON.stringify({chief:JSON.parse(old.review||'{}').chief,rg:u.rg,name:personLabel(u),at:now,attestation,drawing:b.drawing,assignmentAudit:events.map((e:any)=>`${e.created_at} | ${e.previous_assignment} → ${e.replacement} | ${e.reason}`).join('\n')}):null;
- const next={date:b.date,author:old?.author||u.rg,author_name:old?.author_name||personLabel(u),version,status:review?'Conferido':sign?'Assinado':'Rascunho',data:review?old.data:JSON.stringify(d),signature:review?old.signature:sign?attestation:null,review:reviewValue,actor:u.rg,updated:now,pdf:''};next.pdf='';
+ const next={date:b.date,author:old?.author||u.rg,author_name:old?.author_name||personLabel(u),version,status:review?(JSON.parse(old.review||'{}').chief?'Conferido':'Assinado'):sign?'Assinado':'Rascunho',data:review?old.data:JSON.stringify(d),signature:review?old.signature:sign?attestation:null,review:reviewValue,actor:u.rg,updated:now,pdf:''};next.pdf='';
  if(old){const r=await db.prepare("UPDATE livros.ssmt_books SET version=?,status=?,data=?,signature=?,review=?,actor=?,updated=?,pdf=? WHERE date=? AND version=? AND status<>'Conferido'").bind(version,next.status,next.data,next.signature,next.review,u.rg,now,next.pdf,b.date,b.version).run();if(!r.meta.changes)fail('Versão alterada. Reabra o livro.',409);}else{try{await db.prepare('INSERT INTO livros.ssmt_books(date,author,author_name,version,status,data,signature,review,actor,updated,pdf) VALUES(?,?,?,?,?,?,?,?,?,?,?)').bind(next.date,next.author,next.author_name,version,next.status,next.data,next.signature,next.review,u.rg,now,next.pdf).run();}catch(e:any){if(e.code==='23505')fail('Já existe livro neste dia. Reabra o serviço.',409);throw e;}}
  return {ok:true,version,status:next.status};
 }
