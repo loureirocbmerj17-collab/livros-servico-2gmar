@@ -38,4 +38,16 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Downloads reais de Oficial de Dia e Náutica (diário, histórico e mensal) verificados antes e depois da limpeza: HTTP 200, application/pdf, sem redirecionamento para Storage.
 - Compilado sintético de 31 dias testado isoladamente: 125 páginas, aproximadamente 7,7 MB.
 - Nenhum livro fictício criado na produção.
-- Supervisor e Adjunto ainda aguardam implementação.
+- Na entrega de 30/10, Supervisor e Adjunto ainda aguardavam implementação; veja atualização abaixo.
+
+
+## Livro do Supervisor — 31/10/2026
+- Implementado em branch chatgpt/supervisor-book a partir da main 36eee0f. PR do Claude #2 permanece separado; não foi integrado nesta entrega.
+- Nove seções seguem as fotos: meteorologia, ativação, alimentação, estatísticas, atrasos, faltas, apoio, postos/remanejamentos, observações. Assinatura do Supervisor e visto do Oficial de Dia; sem etapa de chefe ou Major.
+- Migração 20261031011506_supervisor_book.sql aplicada como supervisor_book. Cria somente tabelas/funções privadas livros.supervisor_*, RLS, histórico imutável e sincronização com service_attestations. Herda CHECK(pdf='') das tabelas-base já migradas. Nenhuma mudança no schema public.
+- Importação lê Supervisor, Oficial de Dia e tabela POSTO/MILITAR/MILITAR dos Docs/PDFs; procura tabela nas páginas adicionais; mantém seleção da escala mais recente. Validado com escala real de 01/10: 29 GVs, sem sobreavisos ou licenças.
+- Distribuição inicial e movimentações ficam separadas: origem, destino, RG, eventual RG da permuta, horário, motivo. Total de GVs é preenchido por botão, sujeito à conferência.
+- NOAA GFS e NOAA GFSWave 0.25 via APIs Open-Meteo fornecem temperatura ambiente, vento e ondas às 09h/15h em America/Sao_Paulo para Barra da Tijuca. Não há integração direta com SurfGuru. Corrente e temperatura da água permanecem manuais; não confundir direção de onda com corrente.
+- Botões de confirmação/correção da previsão, Não houve, tentativas de SISGEO (2GMAR), preenchimento manual, substituição justificada, recuperação de rascunho, resumo WhatsApp, PDFs diário/histórico/mensal sob demanda.
+- Testes isolados de banco/API cobrem papéis, assinatura, histórico, movimentação, conferência, dependência e PDFs. Testes de UI cobrem nove seções, Não houve e abertura em leitura até Retificar livro. Testes existentes e build aprovados. PDF de quatro páginas conferido visualmente. Nenhum livro fictício em produção.
+- Adjunto continua pendente de implementação. Não remover essa dependência da conferência do Oficial de Dia sem instrução do usuário.

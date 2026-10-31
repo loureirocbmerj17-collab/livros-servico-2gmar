@@ -23,3 +23,17 @@ values.set(key,JSON.stringify({version:0,at:Date.now(),data}));await act(()=>{ro
 await act(()=>{root=create(React.createElement(ReadingWarnings,{data:{inventory:[{id:'v',prefix:'ASE',hours:'9',previousHours:'10',unavailable:false}]}}));});assert.match(JSON.stringify(root.toJSON()),/anterior/);await act(()=>root.unmount());
 await act(()=>{root=create(React.createElement(SigningChecklist,{issues:['Confirme as viaturas']}));});assert.match(JSON.stringify(root.toJSON()),/Confirme as viaturas/);await act(()=>root.unmount());
 console.log('PASS UI safeguards: local autosave, explicit recovery, no signature storage, stale-version and RG isolation, reading warning and signature checklist.');
+// Supervisor interactions: all nine sections, explicit no-occurrence actions, review mode and read-only existing books.
+for(const n of ['supervisor-panel','signature-pad'])fs.writeFileSync('.qa/'+n+'.mjs',ts.transpileModule(fs.readFileSync('app/'+n+'.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"));
+fs.writeFileSync('.qa/download.mjs',ts.transpileModule(fs.readFileSync('app/download.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText);
+const {default:SupervisorPanel}=await import('../.qa/supervisor-panel.mjs');const {supervisorBlank}=await import('../.qa/supervisor-model.mjs');
+let savedBook=null;const sd=supervisorBlank('2026-10-31');sd.responsible='99996';
+globalThis.fetch=async(url,init)=>{const op=init?.body?JSON.parse(init.body).op:new URL(url,'https://test.local').searchParams.get('op');const responses={supervisorPeople:[{rg:'99996',name:'SUPERVISOR',rank:'SUBTEN'}],supervisorList:[],supervisorBook:savedBook,supervisorContext:{blank:sd,roster:{found:true,warnings:[]}}};return Response.json(responses[op]);};
+await act(()=>{root=create(React.createElement(SupervisorPanel,{user:{rg:'99996',name:'SUPERVISOR',role:'enlisted'},onDirty:()=>{}}));});
+const text=n=>n.children.map(c=>typeof c==='string'?c:text(c)).join('');const button=label=>root.root.findAllByType('button').find(b=>text(b)===label);
+await act(()=>button('Abrir serviço').props.onClick());assert.ok(button('Salvar rascunho'));
+for(const section of ['2. Ativação da praia','3. Alimentação','4. Estatísticas','5. Atrasos','6. Faltas','7. Apoio operacional','8. Postos e remanejamentos','9. Observações e assinatura']){await act(()=>button(section).props.onClick());assert.ok(JSON.stringify(root.toJSON()).includes(section.split('. ')[1]));}
+await act(()=>button('5. Atrasos').props.onClick());await act(()=>button('Não houve atrasos').props.onClick());assert.ok(root.root.findAllByType('p').some(p=>text(p)==='Não houve atrasos.'));
+await act(()=>root.unmount());savedBook={date:sd.date,version:1,author:'99996',status:'Assinado',data:sd};
+await act(()=>{root=create(React.createElement(SupervisorPanel,{user:{rg:'99996',name:'SUPERVISOR',role:'enlisted'},onDirty:()=>{}}));});await act(()=>button('Abrir serviço').props.onClick());assert.ok(button('Retificar livro'));assert.equal(button('Salvar rascunho'),undefined);await act(()=>button('Retificar livro').props.onClick());assert.ok(button('Salvar rascunho'));await act(()=>root.unmount());
+console.log('PASS Supervisor UI: nine sections, explicit Não houve, existing books open read-only, Retificar livro enables editing.');

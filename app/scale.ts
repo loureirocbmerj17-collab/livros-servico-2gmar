@@ -1,3 +1,4 @@
+import {parseBeachRows} from './beach-scale';
 import { getDocumentProxy } from 'unpdf';
 export const DEFAULT_FOLDER='1o2yRj36fWqYs8gFbT9eOYOBGHf04keVR';
 const months=['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
@@ -47,7 +48,9 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string){
  if(seen.has(rule[0])){crew[rule[0]]='';const prior=evidence.findIndex(e=>e.index===rule[0]);if(prior>=0)evidence.splice(prior,1);warnings.push(label+': mais de uma linha encontrada; confira manualmente.');continue;}
  seen.add(rule[0]);crew[rule[0]]=value;evidence.push({index:rule[0],label,value});}
  if(!crew.some(Boolean))throw Error('O formato das colunas não foi reconhecido com segurança. Preencha a ala manualmente.');
- return {serviceDate,crew,evidence,warnings,dayCrew,nauticalOperators:[...new Set(nauticalOperators)]};
+ const beachRows=[...rows];
+ for(let number=2;number<=doc.numPages;number++){const content=await (await doc.getPage(number)).getTextContent();const extra:Row[]=[];for(const item of (content.items as any[]).filter(x=>typeof x.str==='string'&&x.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5])){let r=extra.find(r=>Math.abs(r.y-item.transform[5])<2.7);if(!r){r={y:item.transform[5],items:[]};extra.push(r);}r.items.push({str:item.str,x:item.transform[4],w:item.width});}for(const r of extra)r.items.sort((a,b)=>a.x-b.x);beachRows.push(...extra);}
+ return {...parseBeachRows(beachRows),serviceDate,crew,evidence,warnings,dayCrew,nauticalOperators:[...new Set(nauticalOperators)]};
 }
 async function publicRead(url:string,max:number,signal:AbortSignal){
  let current=url;for(let redirects=0;redirects<5;redirects++){
