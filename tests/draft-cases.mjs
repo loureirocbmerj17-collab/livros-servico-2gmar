@@ -43,3 +43,5 @@ await act(()=>{root=create(React.createElement(SupervisorPanel,{kind:'adjunto',u
 const freeFields=root.root.findAllByType('input').filter(n=>n.props.type==='text');assert.equal(freeFields.length,2);await act(()=>freeFields[0].props.onChange({target:{value:'Subten Militar Livre'}}));await act(()=>freeFields[1].props.onChange({target:{value:'Seção livre'}}));await act(()=>button('Adicionar militar do expediente hoje').props.onClick());assert.equal(root.root.findAllByType('input').filter(n=>n.props.type==='text').length,4);
 await act(()=>button('6. Arranchamento').props.onClick());assert.equal(root.root.findAllByType('input').filter(n=>n.props.type==='number').length,5);assert.match(text(root.root),/expediente e praia/);await act(()=>button('2. Situação da OBM').props.onClick());assert.equal(root.root.findAllByType('select').length,6);await act(()=>root.unmount());
 console.log('PASS Adjunto UI: free military/section fields, add multiple personnel, one five-meal ration form for the whole unit, OBM yes/no controls.');
+
+await import('./review-console.mjs');

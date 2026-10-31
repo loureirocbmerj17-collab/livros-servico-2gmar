@@ -69,3 +69,10 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Situação permanece Assinado com uma conferência e passa a Conferido com ambas. A assinatura existente é preservada, inclusive na ordem Oficial -> Chefe. Não há migração nem alteração de registros existentes.
 - A dependência para conferência do Major exige as duas conferências em Náutica/SSMT, além do RG correto do Oficial. Supervisor e Adjunto continuam com o visto do Oficial.
 - Testes tests/independent-reviews.mjs cobrem as duas ordens nos dois livros, preservação de dados/assinaturas, duplicidade, versões concorrentes, bloqueio e dependências.
+
+## Fila Conferência SUBCMT — 31/10/2026
+- Aba exclusiva do perfil reviewer, com filtro mensal e listas Prontos para conferir, Com pendências e Já conferidos. Ordem cronológica para revisão.
+- Leitura dos PDFs gerados sob demanda, fixados na versão da fila, incluindo os quatro livros secundários da mesma data. Nenhum PDF armazenado.
+- Conferir e abrir próximo exige senha individual; Pular por enquanto apenas avança localmente. Reutiliza a operação review com validações de perfil, autoria, versão e quatro dependências no servidor.
+- Náutica/SSMT continuam com assinaturas independentes de chefe e Oficial. Subcomandante confere somente Oficial de Dia; não pode conferir o próprio livro.
+- Sem migração. Testes isolados de API e componente cobrem grupos, acesso, duplicidade, senha individual, próximo/pular e versão do documento.

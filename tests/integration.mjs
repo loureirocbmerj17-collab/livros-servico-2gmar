@@ -77,4 +77,5 @@ await import('./supervisor-cases.mjs').then(m=>m.run({post,get,sql,drawing,passw
 await sql.exec(fs.readFileSync('supabase/migrations/20261031091146_adjunto_book.sql','utf8'));
 await import('./adjunto-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
 await import('./independent-reviews.mjs').then(m=>m.run({post,sql,password,drawing}));
+await import('./review-queue.mjs').then(m=>m.run({post,get,sql,password}));
 await sql.close();
