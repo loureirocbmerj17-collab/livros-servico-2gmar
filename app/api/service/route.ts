@@ -45,6 +45,18 @@ export async function GET(req:Request){try{
  if(op==='dependencies'){const book=await db().prepare('SELECT author FROM books WHERE date=?').bind(url.searchParams.get('date')).first<any>();const rows=(await db().prepare('SELECT * FROM livros.service_attestations WHERE date=?').bind(url.searchParams.get('date')).all()).results;return json(dependencies(rows,book?.author||''));}
  if(op==='scaleConfig'){const row=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();return json({folder:row?.value||DEFAULT_FOLDER});}
  if(op==='users'){if(u.role!=='admin')fail('Acesso restrito à administração.',403);return json((await db().prepare('SELECT rg,name,rank,role,active FROM users ORDER BY name').all()).results);}
+ if(op==='reviewQueue'){
+  if(u.role!=='reviewer')fail('Acesso exclusivo do subcomandante.',403);
+  const month=url.searchParams.get('month')||'';
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');
+  const books=(await db().prepare('SELECT date,author,author_name,version,status,updated,review FROM books WHERE date LIKE ? ORDER BY date').bind(month+'-%').all()).results;
+  const attestations=(await db().prepare('SELECT * FROM livros.service_attestations WHERE date LIKE ?').bind(month+'-%').all()).results;
+  return json(books.map((book:any)=>{
+   const deps=dependencies(attestations.filter((a:any)=>a.date===book.date),book.author);
+   const reasons=[...(book.status==='Rascunho'?['Aguardando assinatura do Oficial de Dia.']:[]),...(book.author===u.rg?['Outro subcomandante deve conferir este livro.']:[]),...deps.filter(d=>!d.complete).map(d=>'Pendente: '+d.name)];
+   return {...book,dependencies:deps,reasons:book.status==='Conferido'?[]:reasons,group:book.status==='Conferido'?'reviewed':book.status==='Assinado'&&!reasons.length?'ready':'pending'};
+  }));
+ }
  if(op==='list')return json((await db().prepare('SELECT date,author,author_name,version,status,updated FROM books ORDER BY date DESC').all()).results);
  const date=url.searchParams.get('date');
  if(op==='monthPdf'){if((url.searchParams.get('type')||'officer')!=='officer')fail('Este tipo de livro ainda não está disponível.',400);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const records=(await db().prepare('SELECT date,author_name,status,version,data,signature,review,updated FROM books WHERE date LIKE ? ORDER BY date').bind(month+'-%').all()).results;if(!records.length)fail('Nenhum livro salvo neste mês.',404);const bytes=await makeMonthlyPdf(month,records,undefined,makePdf);return downloadPdf(bytes,`Livro-Oficial-${month}.pdf`);}

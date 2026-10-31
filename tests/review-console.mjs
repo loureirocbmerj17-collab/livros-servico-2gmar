@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';import React from 'react';import {create,act} from 'react-test-renderer';
+fs.writeFileSync('.qa/review-console.mjs',ts.transpileModule(fs.readFileSync('app/review-console.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText);
+const {default:Panel}=await import('../.qa/review-console.mjs');globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+const calls=[];let rows=['01','02'].map(day=>({date:'2031-01-'+day,author_name:'OF TESTE',version:3,status:'Assinado',group:'ready',reasons:[],dependencies:[{id:'nautica',name:'Náutica',complete:true,version:2}]}));
+globalThis.fetch=async(url,options)=>{calls.push([url,options]);if(options?.method==='POST'){const b=JSON.parse(options.body);assert.equal(b.version,3);assert.equal(b.password,'secret');rows=rows.map(r=>r.date===b.date?{...r,group:'reviewed'}:r);return Response.json({ok:true});}return url.includes('reviewQueue')?Response.json(rows):new Response('pdf',{headers:{'Content-Type':'application/pdf'}});};
+let root;const settle=()=>new Promise(r=>setTimeout(r,0));await act(async()=>{root=create(React.createElement(Panel));await settle();});
+const button=label=>root.root.findAllByType('button').find(b=>b.children.join('')===label);
+await act(async()=>{button('Abrir livro').props.onClick();await settle();});
+assert.ok(calls.some(([url])=>url.includes('op=pdf&date=2031-01-01&version=3')));
+await act(()=>button('Pular por enquanto').props.onClick());assert.ok(JSON.stringify(root.toJSON()).includes('02/01/2031'));
+await act(async()=>{await settle();});
+await act(()=>button('Conferir e abrir próximo').props.onClick());
+await act(()=>root.root.findByProps({type:'password'}).props.onChange({target:{value:'secret'}}));
+await act(async()=>{root.root.findByType('form').props.onSubmit({preventDefault(){}});await settle();});
+assert.equal(calls.filter(([,o])=>o?.method==='POST').length,1);
+assert.ok(JSON.stringify(root.toJSON()).includes('Fim da fila'));
+await act(()=>root.unmount());console.log('PASS SUBCMT UI: exact version PDF; skip; individual password; next queue; no batch review.');
