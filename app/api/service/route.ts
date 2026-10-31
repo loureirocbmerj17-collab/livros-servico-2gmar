@@ -46,7 +46,7 @@ export async function GET(req:Request){try{
  if(op==='scaleConfig'){const row=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();return json({folder:row?.value||DEFAULT_FOLDER});}
  if(op==='users'){if(u.role!=='admin')fail('Acesso restrito à administração.',403);return json((await db().prepare('SELECT rg,name,rank,role,active FROM users ORDER BY name').all()).results);}
  if(op==='reviewQueue'){
-  if(u.role!=='reviewer')fail('Acesso exclusivo do subcomandante.',403);
+  if(!['reviewer','admin'].includes(u.role))fail('Acesso restrito ao subcomandante e à administração.',403);
   const month=url.searchParams.get('month')||'';
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');
   const books=(await db().prepare('SELECT date,author,author_name,version,status,updated,review FROM books WHERE date LIKE ? ORDER BY date').bind(month+'-%').all()).results;

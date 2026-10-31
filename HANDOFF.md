@@ -76,3 +76,5 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Conferir e abrir próximo exige senha individual; Pular por enquanto apenas avança localmente. Reutiliza a operação review com validações de perfil, autoria, versão e quatro dependências no servidor.
 - Náutica/SSMT continuam com assinaturas independentes de chefe e Oficial. Subcomandante confere somente Oficial de Dia; não pode conferir o próprio livro.
 - Sem migração. Testes isolados de API e componente cobrem grupos, acesso, duplicidade, senha individual, próximo/pular e versão do documento.
+
+- Atualização: administrador também acessa Conferência SUBCMT para consulta; apenas reviewer pode confirmar a conferência, com bloqueio na interface e no servidor.
