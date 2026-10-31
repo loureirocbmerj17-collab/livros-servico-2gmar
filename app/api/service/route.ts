@@ -1,3 +1,4 @@
+import {adjuntoGet,adjuntoPost} from '../../adjunto-server';
 import {supervisorGet,supervisorPost} from '../../supervisor-server';
 import {ssmtGet,ssmtPost} from '../../ssmt-server';
 import {nauticalGet,nauticalPost} from '../../nautica-server';
@@ -32,6 +33,8 @@ export async function GET(req:Request){try{
  if(op==='me'){const count=await db().prepare('SELECT count(*) n FROM users').first<any>();return json({user:u?clean(u):null,setup:Number(count.n)===0});}
  if(!u)fail('Entre com seu RG e senha.',401);
  if(op==='operationalOverview'){const row=await db().prepare('SELECT date,status,data FROM livros.nautical_books ORDER BY date DESC LIMIT 1').first<any>();const vehicle=await db().prepare('SELECT date,status,data FROM livros.ssmt_books ORDER BY date DESC LIMIT 1').first<any>();return json({ssmt:vehicle?{date:vehicle.date,status:vehicle.status,inventory:JSON.parse(vehicle.data).inventory}:null,nautica:row?{date:row.date,status:row.status,inventory:JSON.parse(row.data).inventory}:null});}
+ if(op?.startsWith('adjunto'))return json(await adjuntoGet(op,u,url,nauticalContext()));
+ if(op==='monthPdf'&&url.searchParams.get('type')==='adjunto')return json(await adjuntoGet('adjuntoMonthPdf',u,url,nauticalContext()));
  if(op?.startsWith('supervisor'))return json(await supervisorGet(op,u,url,nauticalContext()));
  if(op==='monthPdf'&&url.searchParams.get('type')==='supervisor')return json(await supervisorGet('supervisorMonthPdf',u,url,nauticalContext()));
  if(op?.startsWith('ssmt'))return json(await ssmtGet(op,u,url,nauticalContext()));
@@ -66,6 +69,7 @@ export async function POST(req:Request){try{
  }
  return json({ok:true},200,await issue(rg));}
  if(!u)fail('Sessão encerrada. Entre novamente.',401);
+ if(typeof op==='string'&&op.startsWith('adjunto'))return json(await adjuntoPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('supervisor'))return json(await supervisorPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('ssmt'))return json(await ssmtPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('nautical'))return json(await nauticalPost(op,u,b,nauticalContext()));

@@ -51,3 +51,14 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Botões de confirmação/correção da previsão, Não houve, tentativas de SISGEO (2GMAR), preenchimento manual, substituição justificada, recuperação de rascunho, resumo WhatsApp, PDFs diário/histórico/mensal sob demanda.
 - Testes isolados de banco/API cobrem papéis, assinatura, histórico, movimentação, conferência, dependência e PDFs. Testes de UI cobrem nove seções, Não houve e abertura em leitura até Retificar livro. Testes existentes e build aprovados. PDF de quatro páginas conferido visualmente. Nenhum livro fictício em produção.
 - Adjunto continua pendente de implementação. Não remover essa dependência da conferência do Oficial de Dia sem instrução do usuário.
+
+
+## Livro do Adjunto — 31/10/2026
+- Implementado a partir da main de946fa, separado do PR #2 do Claude. Mesmo fluxo de assinatura do Supervisor: autor escalado como Adjunto, substituição justificada, visto do Oficial de Dia e bloqueio. Atualiza a dependência adjunto no livro principal.
+- Escala reconhece ADJUNTO AO OF. DE DIA separadamente sem aumentar o vetor crew; validado com PDF real de 01/10 (RG 13113), distinto do Supervisor (20714). Campos não reconhecidos ficam manuais.
+- Expediente: campos livres Militar e Seção, botão para acrescentar militares. Arranchamento único de cinco refeições para todo o efetivo, incluindo expediente e praia. Horário opcional e observações por refeição.
+- Situação da OBM Sim/Não com justificativa nos itens Não; meteorologia com confirmação/correção; ativação; SISGEO para prevenções/socorros; óbitos manuais; atrasos, faltas, permutas e observações.
+- Formulário e ciclo de assinatura compartilham o componente SupervisorPanel com kind=adjunto, mas modelos, API, tabelas, atestações, PDF, recuperação local e exportação mensal são separados por tipo.
+- Migração 20261031091146_adjunto_book.sql aplicada como adjunto_book: schema privado livros, RLS, histórico imutável, CHECK(pdf='') herdado e service_attestations. Schema public preservado.
+- Testes dos cinco livros e testes de UI aprovados; build aprovado. PDF sintético de quatro páginas revisado visualmente. Nenhum livro fictício em produção.
+- Todos os quatro livros secundários agora possuem implementação. Conferência do Major continua exigindo as quatro atestações do Oficial do mesmo dia.

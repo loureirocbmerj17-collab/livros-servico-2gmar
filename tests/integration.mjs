@@ -1,7 +1,7 @@
 import ts from 'typescript';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {PGlite} from '@electric-sql/pglite';import {PDFDocument} from 'pdf-lib';
 const qa=path.resolve('.qa');fs.mkdirSync(qa,{recursive:true});
 function compile(source,dest){fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
-for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
+for(const n of ['book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale','adjunto-model','adjunto-server','adjunto-pdf'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
 compile(fs.readFileSync('lib/database.ts','utf8'),'database');compile(fs.readFileSync('lib/storage.ts','utf8'),'storage');
 const {folderFiles,matchesDay,newestScale,driveFileTimes}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
 assert.deepEqual(folderFiles('<tr data-id="doc123"><td aria-label="27 DE OUTUBRO Google Docs Shared"></td></tr><tr data-id="pdf123"><td aria-label="28 DE OUTUBRO.pdf Shared"></td></tr>'),[{id:'doc123',name:'27 DE OUTUBRO',type:'doc'},{id:'pdf123',name:'28 DE OUTUBRO.pdf',type:'pdf'}]);
@@ -25,7 +25,7 @@ const client={async query(q,values){const r=await sql.query(q,values);return {ro
 globalThis.testDb=createDatabase(()=>({...client,async connect(){return client}}));
 
 globalThis.scaleCrew=['CAP RG 99998 TESTE'];
-compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("from '../../../lib/storage'","from './storage'").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
+compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew,adjunto:globalThis.scaleAdjunto||''}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("from '../../../lib/storage'","from './storage'").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
 const {POST,GET}=await import(pathToFileURL(path.join(qa,'route.mjs')));const {blank}=await import(pathToFileURL(path.join(qa,'book-model.mjs')));
 let cookie='';const password='Test-password-42!',setupToken='TEST-ONLY-INITIAL-SETUP-CODE-32-CHARS';process.env.SETUP_TOKEN=setupToken;
 async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];return v}
@@ -74,4 +74,6 @@ for(const [type,day] of [['pdf','2026-10-23'],['nauticalPdf','2026-11-02'],['ssm
 await assert.rejects(sql.query("UPDATE livros.revisions SET pdf='payload'"));
 console.log('PASS data-only migration: exact preservation of all data/signatures/history; zero PDF bytes; downloads from stored data.');
 await import('./supervisor-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
+await sql.exec(fs.readFileSync('supabase/migrations/20261031091146_adjunto_book.sql','utf8'));
+await import('./adjunto-cases.mjs').then(m=>m.run({post,get,sql,drawing,password,qa}));
 await sql.close();

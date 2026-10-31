@@ -1,6 +1,6 @@
 # Livro do Adjunto — modelo recebido em 31/10/2026
 
-Estado: levantamento concluído; implementação e publicação pendentes. Não habilitar atestação até existir fluxo completo testado.
+Estado: implementação concluída; testes de API, banco e formulário aprovados. Publicação pela main após integração.
 
 ## Seções da fotografia
 1. Ala de serviço: Oficial chefe de operações, Oficial RAS 2º GMAR, Adjunto ao Oficial de Dia, COMAT, Comunicante, Permanências, Moto Aquática, Oficial Médico, Técnico de Enfermagem, Encarregado de motorista/ASE, Motorista socorro, Aprovisionador e Supervisores dos setores 1, 2 e 3.
@@ -10,8 +10,8 @@ Estado: levantamento concluído; implementação e publicação pendentes. Não 
 5. Atrasos às formaturas: nome, RG, apresentação e motivo; botão Não houve.
 6. Faltas: nome e RG; botão Não houve. A foto repete o número 9; corrigir numeração na apresentação, preservando conteúdo.
 7. Arranchamento: café da manhã, almoço, lanche da tarde, jantar e ceia; quantidade e observações. Botões sem alterações e não houve fornecimento.
-8. Controle dos militares do expediente: SAD, SST, SOP, SSMT, SSCO, Náutica, SSSG. Confirmar se é presença por militar ou apenas responsável/observação por seção.
-9. Alimentação: horário, quantidade e alterações. Preservar como campo separado do arranchamento até confirmar se se refere à distribuição para a praia.
+8. Controle dos militares do expediente: campos livres Militar e Seção, lado a lado; botão Adicionar militar do expediente hoje; opção Não houve expediente.
+9. Alimentação unificada com arranchamento: café, almoço, lanche, jantar e ceia para todo o efetivo, incluindo expediente e praia; quantidade total, horário opcional e observações. Não há segundo formulário de alimentação.
 10. Estatísticas do 2º GMAR: prevenções, socorros e óbitos. SISGEO somente quando campo identificado explicitamente; nunca usar outros eventos como óbitos. Fallback manual.
 11. Permutas: saída, entrada, função/posto afetado, horário e justificativa; selecionar militares por RG. Preservar escala importada e efetivo após alteração separadamente.
 12. Observações/alterações: texto livre, botão Não houve outras alterações.
