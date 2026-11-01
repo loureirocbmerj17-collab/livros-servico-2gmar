@@ -1,6 +1,7 @@
 import {parseBeachRows} from './beach-scale';
 import { getDocumentProxy } from 'unpdf';
-export const DEFAULT_FOLDER='1o2yRj36fWqYs8gFbT9eOYOBGHf04keVR';
+// Pasta do ano (ex.: ESCALAS 2026), com uma subpasta por mês (JANEIRO ... DEZEMBRO).
+export const DEFAULT_FOLDER='1M-dFG30gP6a_HWn-vVLD8T5e50n_wnzH';
 const months=['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
 export const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 export function folderId(s:string){const v=s.trim();const m=v.match(/^https:\/\/drive\.google\.com\/drive\/folders\/([A-Za-z0-9_-]+)(?:[/?#].*)?$/);const id=m?.[1]||v;if(!/^[A-Za-z0-9_-]{15,100}$/.test(id))throw Error('Informe o link de uma pasta do Google Drive.');return id;}
@@ -9,6 +10,16 @@ function decode(s:string){return s.replace(/&quot;/g,'"').replace(/&#39;/g,"'").
 export function driveFileTimes(html:string){const result=new Map<string,{modifiedAt:number,createdAt:number}>();try{const raw=html.match(/window\['_DRIVE_ivd'\]\s*=\s*'((?:\\.|[^'\\])*)'/)?.[1];if(!raw)return result;const decoded=raw.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|[\\/'"bfnrt])/g,(_,v:string)=>v[0]==='x'||v[0]==='u'?String.fromCharCode(parseInt(v.slice(1),16)):({'\\':'\\',"'":"'",'"':'"','/':'/','b':'\b','f':'\f','n':'\n','r':'\r','t':'\t'} as Record<string,string>)[v]);const rows=JSON.parse(decoded)?.[0];if(Array.isArray(rows))for(const row of rows){if(Array.isArray(row)&&typeof row[0]==='string'&&Number.isSafeInteger(row[10])&&row[10]>0)result.set(row[0],{modifiedAt:row[10],createdAt:Number.isSafeInteger(row[9])?row[9]:0});}}catch{}return result;}
 export function newestScale<T extends {id:string,modifiedAt?:number,createdAt?:number}>(files:T[]):T{if(files.length>1&&files.some(f=>!f.modifiedAt))throw Error('Não foi possível confirmar qual escala é a mais recente. Use o preenchimento manual.');return [...files].sort((a,b)=>(b.modifiedAt||0)-(a.modifiedAt||0)||(b.createdAt||0)-(a.createdAt||0)||a.id.localeCompare(b.id))[0];}
 export function folderFiles(html:string){const files:{id:string,name:string,type:'pdf'|'doc',modifiedAt?:number,createdAt?:number}[]=[];for(const row of html.matchAll(/<tr\b[^>]*data-id="([A-Za-z0-9_-]+)"[^>]*>([\s\S]*?)<\/tr>/g)){const docName=row[2].match(/aria-label="([^"]+?) Google Docs(?: [^"]*)?"/)?.[1];const name=docName||row[2].match(/aria-label="([^"]*?\.pdf)(?:\s[^"<>]*)?"/i)?.[1];if(name&&!files.some(f=>f.id===row[1]))files.push({id:row[1],name:decode(name),type:docName?'doc':'pdf'});}const metadata=driveFileTimes(html);return files.map(f=>({...f,...metadata.get(f.id)}));}
+// Subpastas da listagem pública (ex.: "NOVEMBRO Shared folder").
+export function folderSubfolders(html:string){const out:{id:string,name:string}[]=[];for(const row of html.matchAll(/<tr\b[^>]*data-id="([A-Za-z0-9_-]+)"[^>]*>([\s\S]*?)<\/tr>/g)){const name=row[2].match(/aria-label="([^"]+?) (?:Shared folder|Google Drive Folder|Folder|Pasta compartilhada|Pasta do Google Drive|Pasta)"/)?.[1];if(name&&!out.some(f=>f.id===row[1]))out.push({id:row[1],name:decode(name)});}return out;}
+const monthOf=(name:string)=>{const n=normalize(name);const found=months.map((m,i)=>new RegExp('(^|[^A-Z])(?:'+m+'|'+m.slice(0,3)+')(?=[^A-Z]|$)').test(n)?i:-1).filter(i=>i>=0);return found.length===1?found[0]:-1;};
+// Escolhe a subpasta do mês do serviço. Retorna null quando a pasta não é organizada por meses.
+export function monthFolder(subfolders:{id:string,name:string}[],date:string){const [year,month]=date.split('-').map(Number);const monthly=subfolders.filter(f=>monthOf(f.name)>=0);if(!monthly.length)return null;
+ const matches=monthly.filter(f=>{if(monthOf(f.name)!==month-1)return false;const y=normalize(f.name).match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1];return !y||Number(y)===year;});
+ if(!matches.length)throw Error('Pasta do mês '+months[month-1].replace('MARCO','MARÇO')+' não encontrada na pasta de escalas. Preencha manualmente.');
+ if(matches.length>1)throw Error('Mais de uma pasta para o mês '+months[month-1].replace('MARCO','MARÇO')+' na pasta de escalas. Preencha manualmente.');
+ return matches[0];}
+const folderYear=(html:string)=>Number(normalize(decode(html.match(/<title>([^<]*)<\/title>/i)?.[1]||'')).match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1]||0);
 export function matchesDay(name:string,date:string){const [year,month,day]=date.split('-').map(Number);const n=normalize(name);const named=new RegExp('(^|\\D)0?'+day+'\\s+(?:DE\\s+)?'+months[month-1]+'(?:\\s+(?:DE\\s+)?(20\\d{2}))?(?=\\D|$)').exec(n);if(named)return !named[2]||Number(named[2])===year;return new RegExp('(^|\\D)0?'+day+'[._ -]0?'+month+'[._ -]'+year+'(\\D|$)').test(n);}
 type Row={y:number,items:{str:string,x:number,w:number}[]};
 const rules:[number,RegExp][]=[
@@ -66,7 +77,11 @@ async function publicRead(url:string,max:number,signal:AbortSignal){
  }throw Error('O Drive excedeu o limite de redirecionamentos.');
 }
 export async function loadScale(folder:string,date:string){
- const signal=AbortSignal.timeout(25000);const html=new TextDecoder().decode(await publicRead(`https://drive.google.com/drive/folders/${folderId(folder)}`,4*1024*1024,signal));
+ const signal=AbortSignal.timeout(25000);let html=new TextDecoder().decode(await publicRead(`https://drive.google.com/drive/folders/${folderId(folder)}`,4*1024*1024,signal));
+ // Pasta do ano: confere o ano no nome e entra na subpasta do mês do serviço.
+ const month=monthFolder(folderSubfolders(html),date);
+ if(month){const year=folderYear(html);if(year&&year!==Number(date.slice(0,4)))throw Error('A pasta de escalas configurada é de '+year+'. Atualize a pasta do ano para buscar escalas de '+date.slice(0,4)+'.');
+  folder=month.id;html=new TextDecoder().decode(await publicRead(`https://drive.google.com/drive/folders/${month.id}`,4*1024*1024,signal));}
  const files=folderFiles(html),candidates=files.filter(f=>matchesDay(f.name,date));
  if(!files.length)throw Error('A listagem pública da pasta não está disponível ou não contém Google Docs ou PDFs. O preenchimento manual continua disponível.');
  if(!candidates.length)throw Error('Escala não localizada para este dia na listagem pública da pasta. Preencha manualmente.');
