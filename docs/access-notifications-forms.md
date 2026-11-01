@@ -53,3 +53,16 @@ Arquivos novos principais:
 app/account-server.ts, app/account-panel.tsx, app/mail-service.ts, app/notifications.ts, app/api/reminders/route.ts, app/form-controls.tsx, app/manual-personnel.ts.
 Alterados: API service, página principal, painéis dos cinco livros, modelos/PDF de Supervisor/Adjunto, book-model, globals.css, vercel.json.
 Testes: integration.mjs, draft-cases.mjs, account-notifications.mjs, form-audit.mjs.
+
+## Alternativa Gmail (01/11/2026)
+Sem registro de domínio: MAIL_PROVIDER=gmail e GMAIL_USER=livros2gmar@gmail.com.
+Cadastrar GMAIL_APP_PASSWORD como Secret, apenas em Production, na Vercel e republicar.
+Usar senha de app da conta Google com verificação em duas etapas, nunca a senha normal.
+Não enviar a senha em chat, não versionar nem colocar prefixo NEXT_PUBLIC_.
+Resend é opcional e não é usado como fallback do Gmail.
+SMTP TLS/465; credenciais e mensagens não são registradas em logs técnicos.
+A tela administrativa distingue credenciais cadastradas de entrega comprovada.
+Sem idempotência do provedor, uma tentativa de lembrete incerta não é repetida automaticamente,
+inclusive após interrupção do servidor. Conferir a conta remetente e o histórico administrativo.
+Não há promessa de entrega na caixa principal: limites e filtros do Gmail se aplicam.
+Validar recuperação com um cadastro controlado e recebimento real após configurar a senha.

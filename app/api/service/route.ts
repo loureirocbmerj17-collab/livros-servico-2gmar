@@ -1,5 +1,5 @@
 import {accountAction,needsProfile} from '../../account-server';
-import {mailReady} from '../../mail-service';
+import {mailReady,mailProvider} from '../../mail-service';
 import {adjuntoGet,adjuntoPost} from '../../adjunto-server';
 import {supervisorGet,supervisorPost} from '../../supervisor-server';
 import {ssmtGet,ssmtPost} from '../../ssmt-server';
@@ -36,7 +36,7 @@ export async function GET(req:Request){try{
  if(!u)fail('Entre com seu RG e senha.',401);
  if(needsProfile(u))fail('Atualize seu cadastro e crie uma senha pessoal para continuar.',428);
  if(op==='dayPersonnel'){const date=url.searchParams.get('date')||'';if(!/^\d{4}-\d{2}-\d{2}$/.test(date))fail('Data inválida.');try{const scale=await nauticalContext().scale(date);const text=JSON.stringify([scale.crew,scale.adjunto,scale.beachPosts,scale.serviceAssignments]);const rgs=new Set((text.match(/\b\d{3,12}\b/g)||[]).map(normalizeRg));const people=(await db().prepare('SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name').all()).results;return json({found:true,people:people.filter((p:any)=>rgs.has(p.rg)),source:scale.source});}catch{return json({found:false,people:[],message:'Escala indisponível. Adicione os militares manualmente.'});}}
- if(op==='mailStatus'){if(u.role!=='admin')fail('Acesso restrito.',403);return json({configured:mailReady(),cronConfigured:!!process.env.CRON_SECRET,logs:(await db().prepare('SELECT id,kind,rg,recipient,service_date,book_type,status,attempts,detail,updated_at FROM livros.mail_log ORDER BY updated_at DESC LIMIT 100').all()).results});}
+ if(op==='mailStatus'){if(u.role!=='admin')fail('Acesso restrito.',403);return json({configured:mailReady(),provider:mailProvider(),cronConfigured:!!process.env.CRON_SECRET,logs:(await db().prepare('SELECT id,kind,rg,recipient,service_date,book_type,status,attempts,detail,updated_at FROM livros.mail_log ORDER BY updated_at DESC LIMIT 100').all()).results});}
  if(op==='operationalOverview'){const row=await db().prepare('SELECT date,status,data FROM livros.nautical_books ORDER BY date DESC LIMIT 1').first<any>();const vehicle=await db().prepare('SELECT date,status,data FROM livros.ssmt_books ORDER BY date DESC LIMIT 1').first<any>();return json({ssmt:vehicle?{date:vehicle.date,status:vehicle.status,inventory:JSON.parse(vehicle.data).inventory}:null,nautica:row?{date:row.date,status:row.status,inventory:JSON.parse(row.data).inventory}:null});}
  if(op?.startsWith('adjunto'))return json(await adjuntoGet(op,u,url,nauticalContext()));
  if(op==='monthPdf'&&url.searchParams.get('type')==='adjunto')return json(await adjuntoGet('adjuntoMonthPdf',u,url,nauticalContext()));
