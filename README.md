@@ -9,6 +9,7 @@ Aplicação independente do ChatGPT: Next.js na Vercel, PostgreSQL no Supabase. 
 - Estatísticas do SisGeO e importação da mensagem de encerramento, com revisão antes de aplicar.
 - Livro salvo abre somente para leitura. Autor pode usar **Retificar livro** até conferência.
 - Assinatura desenhada e confirmação por senha; PDF com timão e identidade visual.
+- Assinatura também pode ser importada de imagem (foto ou arquivo no computador/telefone): convertida no navegador para o mesmo formato vetorial da assinatura desenhada, com prévia antes de confirmar. Nada muda no servidor, no banco ou nos PDFs.
 - Perfil `reviewer` confere livro assinado de outro autor, com senha. Conferência bloqueia alterações também no banco.
 - Histórico imutável dos dados e assinaturas de cada versão e registro de ações administrativas. PDFs gerados apenas no download.
 - PDF mensal com capa, índice, dias ausentes e últimas versões em ordem cronológica; rascunhos/pendências identificados.

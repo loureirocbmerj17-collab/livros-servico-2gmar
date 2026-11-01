@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "test": "node tests/integration.mjs && node tests/draft-cases.mjs",
+    "test": "node tests/integration.mjs && node tests/draft-cases.mjs && node tests/signature-import.mjs",
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
