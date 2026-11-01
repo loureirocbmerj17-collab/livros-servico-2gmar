@@ -41,6 +41,6 @@ try{valid(imageToStrokes(dense));}catch(e){assert.match(e.message,/detalhada dem
  const {default:SignaturePad}=await import('../.qa/signature-pad.mjs');
  for(const disabled of [false,true]){let root;await act(()=>{root=create(React.createElement(SignaturePad,{onChange:()=>{},disabled}),{createNodeMock:()=>({getContext:()=>null,getBoundingClientRect:()=>({left:0,top:0,width:600,height:180})})});});
   const button=root.root.findAll(n=>n.type==='button'&&JSON.stringify(n.props.children).includes('Importar assinatura'))[0];assert.ok(button,'botão de importação');assert.equal(button.props.disabled,disabled);
-  const input=root.root.find(n=>n.type==='input'&&n.props.type==='file');assert.match(input.props.accept,/image\//);assert.equal(input.props.hidden,true);
+  const input=root.root.find(n=>n.type==='input'&&n.props.type==='file');assert.match(input.props.accept,/image\//);assert.equal(input.props.hidden,true);assert.equal(input.props.style?.display,'none','o CSS global (input{display:block}) anula [hidden]; o seletor precisa de display:none explícito');
   assert.match(JSON.stringify(root.toJSON()),/salva no computador ou no telefone/);await act(()=>root.unmount());}}
 console.log('PASS assinatura importada: foto e PNG convertidos em traços válidos (limites do servidor); imagens vazias, sem contraste, escuras ou densas demais recusadas com orientação.');
