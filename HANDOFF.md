@@ -87,3 +87,9 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Resend implementado/testado com simulação. RESEND_API_KEY e MAIL_FROM ainda precisam ser configurados pelo proprietário de um domínio verificado. Não declarar envio real funcionando.
 - APP_ORIGIN e CRON_SECRET configurados na Vercel; crons 09h/21h UTC. Histórico/pendências na administração.
 - Sem PDF armazenado e sem livro de teste em produção.
+
+## Gmail sem domínio próprio — 01/11/2026
+- MAIL_PROVIDER=gmail seleciona SMTP Gmail via TLS/465; GMAIL_USER e GMAIL_APP_PASSWORD ficam exclusivamente no servidor. Remetente solicitado: livros2gmar@gmail.com. Resend continua disponível por configuração explícita; sem fallback automático.
+- Ao contrário do Resend, SMTP não oferece chave idempotente. Lembretes são reservados atomicamente como uncertain antes do envio, sem reenvio automático após tentativa ambígua ou interrupção. Aceitação confirmada muda para accepted. Histórico administrativo registra pendências; recuperação continua com link único/30min, solicitável novamente dentro do limite existente.
+- Testes usam transporte simulado, inclusive concorrência e falha após reserva. Nenhum e-mail real enviado. Falta o proprietário cadastrar GMAIL_APP_PASSWORD como Secret na Vercel Production e fazer nova publicação antes de validar entrega real.
+- Sem migração, sem alterações em livros operacionais ou permissões.

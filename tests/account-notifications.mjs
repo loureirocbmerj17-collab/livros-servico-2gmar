@@ -50,6 +50,7 @@ export async function run({post,get,sql,password,qa}){
  await dispatchNotifications(context,new Date('2026-11-14T21:01:00Z'),send);assert.equal(sent,2);
  await dispatchNotifications({db:globalThis.testDb,scale:async()=>{throw Error('offline');}},new Date('2026-11-15T21:00:00Z'),send);assert.equal(sent,2);
  await dispatchNotifications({db:globalThis.testDb,scale:async()=>({crew:[]})},new Date('2026-11-16T21:00:00Z'),send);assert.equal(sent,2);
+ await import('./gmail-mail.mjs').then(m=>m.run({sql,context,dispatchNotifications}));
  globalThis.fetch=original;delete process.env.RESEND_API_KEY;delete process.env.MAIL_FROM;
  console.log('PASS accounts/mail: compulsory profile, RG normalization, password recovery, hashed single-use token, session revocation, rate limit; Brasília scheduling, seniority, substitutions, missing email, no roster, duplicate prevention and retry. No real mail sent.');
 }

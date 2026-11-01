@@ -1,6 +1,6 @@
 import {assignmentRg,nauticalAssignments} from './service-policy';
 import {personLabel} from './person-label';
-import {appOrigin,mailReady,sendMail,mailHash,Message} from './mail-service';
+import {appOrigin,mailReady,mailProvider,sendMail,mailHash,Message} from './mail-service';
 const names:Record<string,string>={officer:'Oficial de Dia',supervisor:'Supervisor',adjunto:'Adjunto',nautica:'Náutica',ssmt:'SSMT'};
 export function serviceWindow(now:Date){
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
@@ -32,19 +32,23 @@ async function processWindow(c:{db:any,scale:(date:string)=>Promise<any>},now:Da
  for(const type of types){
   const rg=recipients[type],person=people.find((p:any)=>p.rg===rg),id='reminder:'+date+':'+type+':'+(rg||'unassigned');
   const status=!rg?'unassigned':!person?.email?'missing_email':!mailReady()?'not_configured':'pending';
-  await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,service_date,book_type,status,detail) VALUES(?,'reminder',?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(id,rg||'',person?.email||'',date,type,status,status==='pending'?'':status==='missing_email'?'E-mail ausente ou militar não cadastrado.':status==='unassigned'?'Responsável não identificado.':status==='not_configured'?'Configurar Resend e remetente.':'').run();
+  await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,service_date,book_type,status,detail) VALUES(?,'reminder',?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(id,rg||'',person?.email||'',date,type,status,status==='pending'?'':status==='missing_email'?'E-mail ausente ou militar não cadastrado.':status==='unassigned'?'Responsável não identificado.':status==='not_configured'?'Configurar o provedor de e-mail e remetente.':'').run();
   if(status!=='pending'){outcomes.push({type,status});continue;}
+  const gmail=mailProvider()==='gmail';
   const prior=await db.prepare('SELECT * FROM livros.mail_log WHERE id=?').bind(id).first();
   if(['accepted','uncertain'].includes(prior.status))continue;
+  if(gmail&&prior.first_attempt_at){await db.prepare("UPDATE livros.mail_log SET status='uncertain',detail='Tentativa anterior sem confirmação; conferir no provedor. Gmail não permite repetição idempotente.',updated_at=now() WHERE id=? AND status NOT IN ('accepted','uncertain')").bind(id).run();continue;}
   if(prior.first_attempt_at&&now.getTime()-new Date(prior.first_attempt_at).getTime()>23*3600000){await db.prepare("UPDATE livros.mail_log SET status='uncertain',detail='Prazo de repetição segura encerrado; conferir no provedor antes de qualquer reenvio.',updated_at=now() WHERE id=?").bind(id).run();continue;}
   const dateBR=date.split('-').reverse().join('/'),end=new Date(Date.parse(date+'T12:00:00Z')+86400000).toISOString().slice(0,10).split('-').reverse().join('/');
   const message:Message=prior.payload||{to:person.email,subject:'2º GMAR — Preenchimento do Livro '+names[type]+' — '+dateBR,text:'Prezado militar '+personLabel(person)+',\n\nConforme a escala do 2º GMAR, consta sua designação para o Livro '+names[type]+', serviço de '+dateBR+' para '+end+'.\n\nAcesse com RG e senha para preencher e assinar:\n'+appOrigin()+'/?book='+type+'&date='+date+'\n\nCaso tenha ocorrido alteração, troca ou permuta e você não seja o responsável nesta data, desconsidere esta mensagem.\n\nMensagem automática — Sistema de Livros de Serviço do 2º GMAR.'};
-  const claimed=await db.prepare("UPDATE livros.mail_log SET status='sending',payload=?,recipient=?,lease_until=now()+interval '2 minutes',first_attempt_at=coalesce(first_attempt_at,now()),updated_at=now() WHERE id=? AND status NOT IN ('accepted','uncertain') AND (lease_until IS NULL OR lease_until<now()) RETURNING id").bind(JSON.stringify(message),message.to,id).first();
+  // Reserve SMTP as uncertain BEFORE network I/O: a crash cannot trigger a duplicate.
+  const gmailClaim="UPDATE livros.mail_log SET status='uncertain',payload=?,recipient=?,first_attempt_at=now(),detail='Envio Gmail reservado; conferir no provedor se não houver confirmação.',updated_at=now() WHERE id=? AND first_attempt_at IS NULL AND status NOT IN ('accepted','uncertain') RETURNING id";
+  const claimed=await db.prepare(gmail?gmailClaim:"UPDATE livros.mail_log SET status='sending',payload=?,recipient=?,lease_until=now()+interval '2 minutes',first_attempt_at=coalesce(first_attempt_at,now()),updated_at=now() WHERE id=? AND status NOT IN ('accepted','uncertain') AND (lease_until IS NULL OR lease_until<now()) RETURNING id").bind(JSON.stringify(message),message.to,id).first();
   if(!claimed)continue;
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<(gmail?1:2);attempt++){
    await db.prepare('UPDATE livros.mail_log SET attempts=attempts+1,updated_at=now() WHERE id=?').bind(id).run();
    try{const provider=await send(mailHash(id),message);await db.prepare("UPDATE livros.mail_log SET status='accepted',provider_id=?,detail='Aceito pelo provedor; não equivale a confirmação de entrega.',lease_until=NULL,updated_at=now() WHERE id=?").bind(provider,id).run();outcomes.push({type,status:'accepted'});break;}
-   catch{if(attempt===1){await db.prepare("UPDATE livros.mail_log SET status='failed',detail='Sem confirmação de envio; nova tentativa usa a mesma chave.',lease_until=NULL,updated_at=now() WHERE id=?").bind(id).run();outcomes.push({type,status:'failed'});}}
+   catch{if(gmail){await db.prepare("UPDATE livros.mail_log SET status='uncertain',detail='Gmail não confirmou o envio; conferir a conta remetente. Sem reenvio automático para evitar duplicidade.',lease_until=NULL,updated_at=now() WHERE id=?").bind(id).run();outcomes.push({type,status:'uncertain'});}else if(attempt===1){await db.prepare("UPDATE livros.mail_log SET status='failed',detail='Sem confirmação de envio; nova tentativa usa a mesma chave.',lease_until=NULL,updated_at=now() WHERE id=?").bind(id).run();outcomes.push({type,status:'failed'});}}
   }
  }
  return {date,outcomes};
