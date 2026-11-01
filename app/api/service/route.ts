@@ -1,3 +1,5 @@
+import {accountAction,needsProfile} from '../../account-server';
+import {mailReady} from '../../mail-service';
 import {adjuntoGet,adjuntoPost} from '../../adjunto-server';
 import {supervisorGet,supervisorPost} from '../../supervisor-server';
 import {ssmtGet,ssmtPost} from '../../ssmt-server';
@@ -20,7 +22,7 @@ import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';
 export const dynamic='force-dynamic';
 const db=()=>database;
 const nauticalContext=()=>({db:db(),check,hash,downloadPdf,scale:async(date:string)=>{const folder=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();return loadScale(folder?.value||DEFAULT_FOLDER,date);}});
-const clean=(u:any)=>({rg:u.rg,name:u.name,role:u.role,active:u.active,rank:u.rank,firstLogin:u.first_login,nauticaChief:!!u.nautica_chief,ssmtChief:!!u.ssmt_chief});
+const clean=(u:any)=>({rg:u.rg,name:u.name,role:u.role,active:u.active,rank:u.rank,firstLogin:u.first_login,email:u.email||'',needsProfile:needsProfile(u),nauticaChief:!!u.nautica_chief,ssmtChief:!!u.ssmt_chief});
 const json=(v:any,status=200,extra:any={})=>v instanceof Response?v:Response.json(v,{status,headers:{'Cache-Control':'no-store',...extra}});
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(b=>b.toString(16).padStart(2,'0')).join('');
 async function password(p:string,salt=crypto.randomUUID()){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(p),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:new TextEncoder().encode(salt),iterations:100000},key,256);return salt+':'+Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2,'0')).join('');}
@@ -32,6 +34,9 @@ export async function GET(req:Request){try{
  const url=new URL(req.url),op=url.searchParams.get('op');const u=await me(req);
  if(op==='me'){const count=await db().prepare('SELECT count(*) n FROM users').first<any>();return json({user:u?clean(u):null,setup:Number(count.n)===0});}
  if(!u)fail('Entre com seu RG e senha.',401);
+ if(needsProfile(u))fail('Atualize seu cadastro e crie uma senha pessoal para continuar.',428);
+ if(op==='dayPersonnel'){const date=url.searchParams.get('date')||'';if(!/^\d{4}-\d{2}-\d{2}$/.test(date))fail('Data inválida.');try{const scale=await nauticalContext().scale(date);const text=JSON.stringify([scale.crew,scale.adjunto,scale.beachPosts,scale.serviceAssignments]);const rgs=new Set((text.match(/\b\d{3,12}\b/g)||[]).map(normalizeRg));const people=(await db().prepare('SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name').all()).results;return json({found:true,people:people.filter((p:any)=>rgs.has(p.rg)),source:scale.source});}catch{return json({found:false,people:[],message:'Escala indisponível. Adicione os militares manualmente.'});}}
+ if(op==='mailStatus'){if(u.role!=='admin')fail('Acesso restrito.',403);return json({configured:mailReady(),cronConfigured:!!process.env.CRON_SECRET,logs:(await db().prepare('SELECT id,kind,rg,recipient,service_date,book_type,status,attempts,detail,updated_at FROM livros.mail_log ORDER BY updated_at DESC LIMIT 100').all()).results});}
  if(op==='operationalOverview'){const row=await db().prepare('SELECT date,status,data FROM livros.nautical_books ORDER BY date DESC LIMIT 1').first<any>();const vehicle=await db().prepare('SELECT date,status,data FROM livros.ssmt_books ORDER BY date DESC LIMIT 1').first<any>();return json({ssmt:vehicle?{date:vehicle.date,status:vehicle.status,inventory:JSON.parse(vehicle.data).inventory}:null,nautica:row?{date:row.date,status:row.status,inventory:JSON.parse(row.data).inventory}:null});}
  if(op?.startsWith('adjunto'))return json(await adjuntoGet(op,u,url,nauticalContext()));
  if(op==='monthPdf'&&url.searchParams.get('type')==='adjunto')return json(await adjuntoGet('adjuntoMonthPdf',u,url,nauticalContext()));
@@ -68,6 +73,7 @@ export async function GET(req:Request){try{
 export async function POST(req:Request){try{
  if(req.headers.get('origin')!==new URL(req.url).origin)fail('Origem inválida.',403);
  const input=await req.text();if(input.length>250000)fail('Conteúdo muito extenso. Reduza o texto ou simplifique a assinatura.');const b=JSON.parse(input);const op=b.op;let u=await me(req);
+ if(['profile','forgotPassword','resetPassword'].includes(op)){const result=await accountAction(op,b,u,{db:db(),password,check});return json({ok:true,message:result.message},200,result.renewSession?await issue(result.renewSession):{});}
  if(op==='setup'||op==='login'){
  const rg=normalizeRg(b.rg);if(!/^\d{3,12}$/.test(rg)||typeof b.password!=='string')fail('Informe RG e senha.');
  if(op==='setup'){
@@ -81,6 +87,7 @@ export async function POST(req:Request){try{
  }
  return json({ok:true},200,await issue(rg));}
  if(!u)fail('Sessão encerrada. Entre novamente.',401);
+ if(needsProfile(u)&&op!=='logout')fail('Atualize seu cadastro e crie uma senha pessoal para continuar.',428);
  if(typeof op==='string'&&op.startsWith('adjunto'))return json(await adjuntoPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('supervisor'))return json(await supervisorPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('ssmt'))return json(await ssmtPost(op,u,b,nauticalContext()));
@@ -105,8 +112,8 @@ export async function POST(req:Request){try{
  if(op==='password'){if(!await check(b.current,u.password))fail('Senha atual incorreta.');if(String(b.password).length<8)fail('A nova senha deve ter pelo menos 8 caracteres.');await db().batch([db().prepare('UPDATE users SET password=?,first_login=false WHERE rg=?').bind(await password(b.password),u.rg),db().prepare('DELETE FROM sessions WHERE rg=?').bind(u.rg)]);return json({ok:true},200,await issue(u.rg));}
  if(op==='user'){
  if(u.role!=='admin')fail('Somente a administração pode cadastrar usuários.',403);const rg=normalizeRg(b.rg);if(!/^\d{3,12}$/.test(rg)||!String(b.name).trim()||!['officer','reviewer','admin','enlisted'].includes(b.role))fail('Dados do usuário inválidos.');if(rg===u.rg&&(b.role!=='admin'||!b.active))fail('Você não pode remover seu próprio acesso administrativo.');
- const old=await db().prepare('SELECT * FROM users WHERE rg=?').bind(rg).first<any>();if(!old&&String(b.password||'').length<8)fail('Defina uma senha com pelo menos 8 caracteres.');if(b.password&&b.password.length<8)fail('Use pelo menos 8 caracteres.');const pw=b.password?await password(b.password):old.password;
- await db().batch([db().prepare('INSERT INTO users(rg,name,role,password,active,rank) VALUES(?,?,?,?,?,?) ON CONFLICT(rg) DO UPDATE SET name=excluded.name,role=excluded.role,password=excluded.password,active=excluded.active,rank=excluded.rank').bind(rg,String(b.name).slice(0,150),b.role,pw,b.active?1:0,String(b.rank??old?.rank??'').slice(0,60)),db().prepare('DELETE FROM sessions WHERE rg=?').bind(rg),db().prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,`Usuário ${rg}: perfil ${b.role}; ativo ${!!b.active}; senha alterada ${!!b.password}`,new Date().toISOString())]);return json({ok:true});}
+ const old=await db().prepare('SELECT * FROM users WHERE rg=?').bind(rg).first<any>();const chosen=String(b.password||(!old?rg:''));if(chosen&&chosen!==rg&&chosen.length<8)fail('Use pelo menos 8 caracteres ou o RG para acesso inicial.');const pw=chosen?await password(chosen):old.password;
+ await db().batch([db().prepare('INSERT INTO users(rg,name,role,password,active,rank,first_login) VALUES(?,?,?,?,?,?,?) ON CONFLICT(rg) DO UPDATE SET name=excluded.name,role=excluded.role,password=excluded.password,active=excluded.active,rank=excluded.rank,first_login=excluded.first_login').bind(rg,String(b.name).slice(0,150),b.role,pw,b.active?1:0,String(b.rank??old?.rank??'').slice(0,60),chosen===rg?true:old?.first_login||false),db().prepare('DELETE FROM sessions WHERE rg=?').bind(rg),db().prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,`Usuário ${rg}: perfil ${b.role}; ativo ${!!b.active}; senha alterada ${!!b.password}`,new Date().toISOString())]);return json({ok:true});}
  if(!['save','sign','review'].includes(op))fail('Operação desconhecida.');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||isNaN(Date.parse(b.date))||new Date(b.date).toISOString().slice(0,10)!==b.date)fail('Data inválida.');
  const old=await db().prepare('SELECT * FROM books WHERE date=?').bind(b.date).first<any>();

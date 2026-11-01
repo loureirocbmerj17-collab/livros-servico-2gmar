@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+export async function run({post,get,sql,password,qa}){
+ await post('login',{rg:'99996',password});
+ await sql.query("UPDATE livros.users SET email='',first_login=true WHERE rg='99996'");
+ assert.equal((await get('op=nauticalList')).status,428);
+ await post('nauticalSave',{},428);
+ await post('profile',{rg:'99998',email:'military@example.test',current:password,password},400);
+ await post('profile',{rg:'99996',email:'invalid',current:password,password},400);
+ await post('profile',{rg:'0099996',email:'military@example.test',current:password,password:'99996'},400);
+ await post('profile',{rg:'0099996',email:'military@example.test',current:password,password});
+ assert.equal((await get('op=nauticalList')).status,200);
+ await post('forgotPassword',{rg:'99996',email:'military@example.test'},503);
+ process.env.RESEND_API_KEY='test-only';process.env.MAIL_FROM='test@example.test';
+ const original=globalThis.fetch;let link,deliveries=0;
+ globalThis.fetch=async(url,options)=>{assert.equal(url,'https://api.resend.com/emails');const m=JSON.parse(options.body);link=m.text.match(/#reset=([a-f0-9]+)/)?.[1];deliveries++;return Response.json({id:'test-provider-id'});};
+ await post('forgotPassword',{rg:'99996',email:'wrong@example.test'});assert.equal(deliveries,0);
+ await post('forgotPassword',{rg:'99996',email:'military@example.test'});assert.equal(deliveries,1);assert.equal(link.length,64);
+ const saved=(await sql.query("SELECT * FROM livros.password_resets WHERE rg='99996'")).rows[0];assert.notEqual(saved.token_hash,link);
+ await post('resetPassword',{token:link,password:'New-personal-password!'});
+ assert.equal((await get('op=nauticalList')).status,401);
+ await post('resetPassword',{token:link,password:'Another-password!'},400);
+ await post('login',{rg:'99996',password:'New-personal-password!'});
+ // Expired links cannot be consumed.
+ const {mailHash}=await import('../.qa/mail-service.mjs');
+ const expired='a'.repeat(64);
+ await sql.query("INSERT INTO livros.password_resets(token_hash,rg,password_hash,email,expires_at) SELECT $1,rg,password,email,now()-interval '1 minute' FROM livros.users WHERE rg='99996'",[mailHash(expired)]);
+ await post('resetPassword',{token:expired,password:'Should-not-change!'},400);
+ // Restore test fixture password through authenticated profile.
+ await post('profile',{rg:'99996',email:'military@example.test',current:'New-personal-password!',password});
+ await post('forgotPassword',{rg:'99996',email:'military@example.test'},429);
+ const {serviceWindow,scheduledRecipients,dispatchNotifications}=await import('../.qa/notifications.mjs');
+ assert.deepEqual(serviceWindow(new Date('2026-11-13T09:00:00Z')),{date:'2026-11-12',types:['officer','adjunto','nautica','ssmt']});
+ assert.deepEqual(serviceWindow(new Date('2026-11-12T21:00:00Z')),{date:'2026-11-12',types:['supervisor']});
+ assert.equal(serviceWindow(new Date('2026-11-12T20:59:00Z')),null);
+ const crew=Array(15).fill('');crew[0]='CAP RG 99998';crew[5]='SUBTEN RG 99996';crew[8]='SD RG 99998 / SUBTEN RG 99996';crew[14]='RG 99996';
+ const scale={crew,adjunto:'RG 99996'};
+ assert.equal(scheduledRecipients(scale,[{rg:'99998',rank:'SD'},{rg:'99996',rank:'SUBTEN'}],[]).nautica,'99996');
+ assert.equal(scheduledRecipients(scale,[],[{book_type:'supervisor',actor:'99997',replacement:'MAJ RG 99997'}]).supervisor,'99997');
+ let sent=0;const messages=[];
+ const context={db:globalThis.testDb,scale:async()=>scale},send=async(id,m)=>{sent++;messages.push(m);return 'fake-'+sent;};
+ const moment=new Date('2026-11-12T21:00:00Z');
+ await dispatchNotifications(context,moment,send);await dispatchNotifications(context,moment,send);
+ assert.equal(sent,1);assert.match(messages[0].text,/book=supervisor&date=2026-11-12/);
+ await sql.query("UPDATE livros.users SET email='' WHERE rg='99996'");
+ await dispatchNotifications(context,new Date('2026-11-13T21:00:00Z'),send);assert.equal(sent,1);
+ assert.equal((await sql.query("SELECT status FROM livros.mail_log WHERE service_date='2026-11-13' AND book_type='supervisor'")).rows[0].status,'missing_email');
+ await sql.query("UPDATE livros.users SET email='military@example.test' WHERE rg='99996'");
+ let attempts=0;await dispatchNotifications(context,new Date('2026-11-14T21:00:00Z'),async()=>{attempts++;throw Error('timeout');});assert.equal(attempts,2);
+ await sql.query("UPDATE livros.mail_log SET first_attempt_at='2026-11-14T21:00:00Z' WHERE service_date='2026-11-14'");
+ await dispatchNotifications(context,new Date('2026-11-14T21:01:00Z'),send);assert.equal(sent,2);
+ await dispatchNotifications({db:globalThis.testDb,scale:async()=>{throw Error('offline');}},new Date('2026-11-15T21:00:00Z'),send);assert.equal(sent,2);
+ await dispatchNotifications({db:globalThis.testDb,scale:async()=>({crew:[]})},new Date('2026-11-16T21:00:00Z'),send);assert.equal(sent,2);
+ globalThis.fetch=original;delete process.env.RESEND_API_KEY;delete process.env.MAIL_FROM;
+ console.log('PASS accounts/mail: compulsory profile, RG normalization, password recovery, hashed single-use token, session revocation, rate limit; Brasília scheduling, seniority, substitutions, missing email, no roster, duplicate prevention and retry. No real mail sent.');
+}

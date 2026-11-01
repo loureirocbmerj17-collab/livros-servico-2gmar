@@ -37,8 +37,8 @@ export async function makeSupervisorPdf(book:any){
  section('02','ATIVAÇÃO DA PRAIA (Nº DE GVs)');table(['TOTAL','PARCIAL'],[[d.activation.total,d.activation.partial]],[CW/2,CW/2]);
  section('03','ALIMENTAÇÃO');table(['REFEIÇÃO','QUANTIDADE / SAÍDA','ALTERAÇÕES'],['lunch','snack'].map((k,i)=>[i?'Lanche':'Almoço',d.meals[k].quantity+' / '+(d.meals[k].time||'Não houve'),d.meals[k].changes]),[100,150,CW-250]);
  section('04','ESTATÍSTICAS');table(['RESGATES','CRIANÇAS PERDIDAS','PREVENÇÕES'],[[d.stats.rescues,d.stats.lost,d.stats.preventions]],[CW/3,CW/3,CW/3]);
- section('05','ATRASOS MILITARES DA PRAIA');table(['MILITAR / RG','APRESENTAÇÃO','MOTIVO'],d.late.length?d.late.map((r:any)=>[person(r.rg),r.time,r.reason]):[[d.noLate?'Não houve':'Pendente','','']],[210,90,CW-300]);
- section('06','FALTAS MILITARES DA PRAIA');table(['MILITAR / RG','POSTO ESCALADO'],d.absent.length?d.absent.map((r:any)=>[person(r.rg),r.post]):[[d.noAbsent?'Não houve':'Pendente','']],[300,CW-300]);
+ section('05','ATRASOS MILITARES DA PRAIA');table(['MILITAR / RG','APRESENTAÇÃO','MOTIVO'],d.late.length?d.late.map((r:any)=>[person(r.rg),r.time,r.reason]):[['Sem alterações','','']],[210,90,CW-300]);
+ section('06','FALTAS MILITARES DA PRAIA');table(['MILITAR / RG','POSTO ESCALADO'],d.absent.length?d.absent.map((r:any)=>[person(r.rg),r.post]):[['Sem alterações','']],[300,CW-300]);
  section('07','APOIO OPERACIONAL');table(['ÓRGÃO','QUANTIDADE'],d.support.map((r:any)=>[r.agency,r.quantity]),[360,CW-360]);
  section('08','ATIVAÇÃO DOS POSTOS');table(['POSTO','GUARNIÇÃO INICIAL / RG'],d.posts.map((r:any)=>[r.post,r.rgs.map(person).join('\n')||'Não ativado']),[120,CW-120]);
  if(d.movements.length){table(['HORÁRIO / POSTOS','MILITARES / MOTIVO'],d.movements.map((m:any)=>[m.time+' / '+m.from+' para '+m.to,person(m.rg)+(m.swapRg?' / Permuta com '+person(m.swapRg):'')+'\n'+m.reason]),[190,CW-190]);table(['POSTO','GUARNIÇÃO APÓS REMANEJAMENTOS'],effectivePosts(d.posts,d.movements).filter((p:any)=>p.rgs.length).map((p:any)=>[p.post,p.rgs.map(person).join('\n')]),[120,CW-120]);}

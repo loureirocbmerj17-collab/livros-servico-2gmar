@@ -78,3 +78,12 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Sem migração. Testes isolados de API e componente cobrem grupos, acesso, duplicidade, senha individual, próximo/pular e versão do documento.
 
 - Atualização: administrador também acessa Conferência SUBCMT para consulta; apenas reviewer pode confirmar a conferência, com bloqueio na interface e no servidor.
+
+## Cadastro, e-mails e formulários — 31/10/2026
+- Branch chatgpt/access-notifications-forms a partir de e9933db. PR do Claude preservado.
+- Migração account_mail_notifications aplicada: e-mail/perfil em livros.users, password_resets e mail_log privados com RLS. Sem alterar public/SAD.
+- Cadastro obrigatório para primeiro acesso ou ausência de e-mail; recuperação por token com validade 30min, uso único, hash e revogação de sessões.
+- Botões Sim/Não, militares da escala com preenchimento manual preservado, opcionais sem movimento e padrões documentados em docs/access-notifications-forms.md.
+- Resend implementado/testado com simulação. RESEND_API_KEY e MAIL_FROM ainda precisam ser configurados pelo proprietário de um domínio verificado. Não declarar envio real funcionando.
+- APP_ORIGIN e CRON_SECRET configurados na Vercel; crons 09h/21h UTC. Histórico/pendências na administração.
+- Sem PDF armazenado e sem livro de teste em produção.
