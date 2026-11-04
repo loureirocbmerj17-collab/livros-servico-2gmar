@@ -35,7 +35,7 @@ export async function makeNauticalPdf(book:any){
  table(['MILITAR','RG','FUNÇÃO / JORNADA'],d.operators.map((p:any)=>[p.name,p.rg,p.rg===d.responsible?'Responsável / 24h':'Operador / 24h']),[270,80,CW-350]);
  if(d.carryDate)block('BASE','CONTINUIDADE DO SERVIÇO',`Condições e pendências recuperadas de ${dateBR(d.carryDate)}. Revisão pelo responsável: ${d.confirmed?'confirmada':'pendente'}.`,35);
  section('02','INVENTÁRIO OPERACIONAL');
- table(['EQUIPAMENTO','SITUAÇÃO','HORÍMETRO','LOCAL / OBSERVAÇÃO'],d.inventory.map((e:any)=>[`${e.prefix} (${e.kind})`,e.condition||'Pendente',e.unavailable?'Indisponível: '+e.unavailableReason:e.hours,[e.location,e.note].filter(Boolean).join('\n')]),[105,62,115,CW-282]);
+ table(['EQUIPAMENTO','SITUAÇÃO','HORÍMETRO','LOCAL / OBSERVAÇÃO'],d.inventory.map((e:any)=>[`${e.prefix} (${e.kind})`,e.condition||'Pendente',e.unavailable?'Indisponível: '+e.unavailableReason:e.hours,[e.location,e.note,'SISGEO: '+(e.sisgeo===true?'Conferido':e.sisgeo===false?'Não conferido':'Não informado')].filter(Boolean).join('\n')]),[105,62,115,CW-282]);
  section('03','ATIVAÇÕES E GUARNIÇÕES');
  table(['EQUIPAMENTO / POSTO','INÍCIO / FIM','GUARNIÇÃO'],d.activations.length?d.activations.map((a:any)=>[eq(a.equipment)+' / '+a.post,a.start+' / '+(a.end||'Não informado'),a.crew.map(person).join('\n')]):[['Sem ativações registradas.','-','-']],[180,90,CW-270]);
  section('04','ABASTECIMENTOS DO SERVIÇO');

@@ -36,7 +36,7 @@ export async function makeSsmtPdf(book:any){
  if(d.carryDate)block('BASE','CONTINUIDADE DO SERVIÇO',`Condições e pendências recuperadas de ${dateBR(d.carryDate)}. Revisão pelo responsável: ${d.confirmed?'confirmada':'pendente'}.`,35);
  block('CHEFIA','RESPONSÁVEIS DO SERVIÇO','Oficial de dia: '+person(d.officerRg||'')+'\nEncarregado de motoristas: '+person(d.chiefDriverRg||''),35);
  section('02','CONDIÇÃO DAS VIATURAS');
- table(['VIATURA / OP-INOP','LOCAL / HODÔMETRO','CONDUTOR / SISGEO'],d.inventory.map((v:any)=>[v.prefix+' / '+(v.condition||'Pendente'),v.location+'\n'+(v.unavailable?'Leitura indisponível: '+v.unavailableReason:v.hours+' km')+(v.note?'\n'+v.note:''),(v.driver?person(v.driver):'Sem condutor informado')+'\nSISGEO: '+(v.sisgeo?'Conferido':'Não conferido')]),[115,210,CW-325]);
+ table(['VIATURA / OP-INOP','LOCAL / HODÔMETRO','CONDUTOR / SISGEO'],d.inventory.map((v:any)=>[v.prefix+' / '+(v.condition||'Pendente'),v.location+'\n'+(v.unavailable?'Leitura indisponível: '+v.unavailableReason:v.hours+' km')+(v.note?'\n'+v.note:''),(v.driver?person(v.driver):'Sem condutor informado')+'\nSISGEO: '+(v.sisgeo===true?'Conferido':v.sisgeo===false?'Não conferido':'Não informado')]),[115,210,CW-325]);
  block('03','OCORRÊNCIAS, MANUTENÇÕES E DEMAIS ALTERAÇÕES',d.observations||'Sem alterações registradas.',80);
  if(d.assignmentAudit)block('AUDIT','RETIFICAÇÃO DA RESPONSABILIDADE',d.assignmentAudit,40);
  const review=book.review?JSON.parse(book.review):null;
