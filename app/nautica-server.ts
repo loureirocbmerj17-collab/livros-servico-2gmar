@@ -1,3 +1,5 @@
+import {syncFleet} from './sisgeo-fleet';
+import {mergeFleetInventory} from './fleet-inventory';
 import {nauticalBlank,validateNautical,stockEnd,equipmentKinds,operationalStockEquipment} from './nautica-model';
 import {assignmentRg,normalizeRg,nauticalAssignments} from './service-policy';
 import {personLabel} from './person-label';
@@ -18,10 +20,17 @@ export async function nauticalGet(op:string,u:any,url:URL,c:Context){
  if(op==='nauticalEquipment')return results(c.db,'SELECT * FROM livros.nautical_equipment ORDER BY prefix');
  if(op==='nauticalMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await results(c.db,'SELECT date,author_name,status,version,data,signature,review,updated FROM livros.nautical_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro da Náutica neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DA NÁUTICA',makeNauticalPdf),`Livro-Nautica-${month}.pdf`);}
  validDate(date);
+ if(op==='nauticalFleet'){
+ const saved=await one(c.db,'SELECT author,status,review FROM livros.nautical_books WHERE date=?',date);
+ if(saved&&(saved.status!=='Rascunho'||saved.review||saved.author!==u.rg))return {found:false,locked:true,message:'Livro preservado. Atualização automática disponível somente no rascunho do autor.'};
+ return syncFleet(c.db,u.rg,'nautical',date);
+ }
  if(op==='nauticalContext'){
+ const fleet=await syncFleet(c.db,u.rg,'nautical',date);
+
  const [r,equipment,previous,monthPurchases]=await Promise.all([roster(c,date),results(c.db,'SELECT * FROM livros.nautical_equipment WHERE active=true ORDER BY prefix'),one(c.db,"SELECT date,data FROM livros.nautical_books WHERE date<? AND status IN ('Assinado','Conferido') ORDER BY date DESC LIMIT 1",date),purchaseMonth(c,date)]);
  const latest=await one(c.db,'SELECT data FROM livros.nautical_books WHERE date<? ORDER BY date DESC LIMIT 1',date);const latestInventory=latest?JSON.parse(latest.data).inventory:[];
- const d=nauticalBlank(date),prev=previous?JSON.parse(previous.data):null;d.operators=r.operators;(d as any).dayCrew=(r as any).dayCrew||[];d.inventory=equipment.map((e:any)=>{const old=prev?.inventory.find((i:any)=>i.id===e.id)||e.initial_data;return {id:e.id,prefix:e.prefix,kind:e.kind,condition:old?.condition||'',location:old?.location||'Galpão Náutica',hours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',previousHours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',unavailable:!!old?.unavailable,unavailableReason:old?.unavailableReason||'',note:old?.note||''}});if(prev){d.carryDate=previous.date;d.changes=prev.changes.filter((r:any)=>r.status==='Pendente');d.stock=prev.stock.map((s:any)=>({fuel:s.fuel,initial:String(stockEnd(s)),incoming:'0',outgoing:'0'}));}return {roster:r,blank:d,monthPurchases};
+ const d=nauticalBlank(date),prev=previous?JSON.parse(previous.data):null;d.operators=r.operators;(d as any).dayCrew=(r as any).dayCrew||[];d.inventory=equipment.map((e:any)=>{const old=prev?.inventory.find((i:any)=>i.id===e.id)||(e.initial_data?.sisgeo?{}:e.initial_data);return {id:e.id,prefix:e.prefix,kind:e.kind,condition:old?.condition||'',location:old?.location||'Galpão Náutica',hours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',previousHours:latestInventory.find((i:any)=>i.id===e.id)?.hours||old?.hours||'00000',unavailable:!!old?.unavailable,unavailableReason:old?.unavailableReason||'',note:old?.note||''}});if(prev){d.carryDate=previous.date;d.changes=prev.changes.filter((r:any)=>r.status==='Pendente');d.stock=prev.stock.map((s:any)=>({fuel:s.fuel,initial:String(stockEnd(s)),incoming:'0',outgoing:'0'}));}if(fleet.found){d.inventory=mergeFleetInventory(d.inventory,fleet.equipment,'nautical',date);(d as any).fleetSource=fleet.source;}return {roster:r,blank:d,monthPurchases,fleet};
  }
  const book=await one(c.db,'SELECT * FROM livros.nautical_books WHERE date=?',date);
  // Single-day nautical consultation is available to the unit; bulk lists remain restricted.
@@ -37,6 +46,7 @@ export async function nauticalPost(op:string,u:any,b:any,c:Context){
  const prefix=String(b.prefix||'').trim().toUpperCase();if(!/^[A-Z0-9ÁÉÍÓÚÃÕÇ .\/-]{2,40}$/.test(prefix)||!equipmentKinds.includes(b.kind))fail('Informe identificação e tipo de equipamento.');
  const id=b.id||crypto.randomUUID(),initial=b.initial_data||{};if(typeof b.active!=='boolean'||!['','OP','INOP'].includes(initial.condition||'')||[b.model,b.description,initial.location,initial.hours,initial.note].some(v=>v!==undefined&&(typeof v!=='string'||v.length>1000))||(initial.hours&&!/^\d+(\.\d{1,3})?$/.test(initial.hours)))fail('Dados do equipamento inválidos.');
  const old=await one(db,'SELECT * FROM livros.nautical_equipment WHERE id=?',id);if(old&&old.updated!==b.updated)fail('Cadastro alterado; recarregue a lista.',409);
+ delete initial.sisgeo;if(old?.initial_data?.sisgeo)initial.sisgeo=old.initial_data.sisgeo;
  try{await db.batch([db.prepare('INSERT INTO livros.nautical_equipment(id,prefix,kind,model,description,active,initial_data,updated,actor) VALUES(?,?,?,?,?,?,?::jsonb,?,?) ON CONFLICT(id) DO UPDATE SET prefix=excluded.prefix,kind=excluded.kind,model=excluded.model,description=excluded.description,active=excluded.active,initial_data=excluded.initial_data,updated=excluded.updated,actor=excluded.actor').bind(id,prefix,b.kind,b.model||'',b.description||'',b.active,JSON.stringify(initial),now,u.rg),db.prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,'Equipamento Náutica: '+JSON.stringify({before:old,after:{id,prefix,kind:b.kind,model:b.model,description:b.description,active:b.active,initial_data:initial}}),now)]);}catch(e:any){if(e.code==='23505')fail('Já existe equipamento com este prefixo.',409);throw e;}return {ok:true,id};
  }
  validDate(b.date);const old=await one(db,'SELECT * FROM livros.nautical_books WHERE date=?',b.date);

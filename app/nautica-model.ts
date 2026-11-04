@@ -1,6 +1,6 @@
 export const operationalStockEquipment='Mat Operacional/Estoque';
 export const nauticalSections=['Militares','Embarcações','Ativações','Combustível','Alterações','Passagem','Assinaturas'];
-export const equipmentKinds=['AMA','BIR','AQ','Motor de popa','Carreta','Outro'];
+export const equipmentKinds=['AMA','BIR','RTE','AQ','AQS','Motor de popa','Carreta','Outro'];
 export const fuelTypes=['Gasolina','Óleo 2T','Gasolina misturada'];
 export const nextDay=(date:string)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)};
 export function nauticalBlank(date:string){return {date,endDate:nextDay(date),responsible:'',operators:[] as any[],inventory:[] as any[],activations:[] as any[],refuels:[] as any[],purchases:[] as any[],stock:fuelTypes.map(fuel=>({fuel,initial:'0',incoming:'0',outgoing:'0'})),changes:[] as any[],occurrences:[] as any[],sisgeoResponsible:'',sisgeoChecklist:'',radios:'0',chargers:'0',covers:'0',fuelCards:false,keys:false,observations:'',deactivation:'',carryDate:'',confirmed:false};}

@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+export async function run({sql,get,post,password}){
+ const {parseFleet,currentFleetService,syncFleet}=await import('../.qa/sisgeo-fleet.mjs');
+ const {mergeFleetInventory}=await import('../.qa/fleet-inventory.mjs');
+ const now=new Date('2035-05-02T12:00:00Z'),date='2035-05-02';
+ const row={Id:'synthetic-fleet-1',Viatura:'AMA998',Prefixo:'AMA',UnidadeLotacao:'2GMAR',Situacao:1,Odometro:'289,3',ConferenciaViatura:'10',SituacaoOperacional:'Indisponível (Sem RH)',Guarnicao:'NÃO COPIAR',Conferente:'NÃO COPIAR'};
+ const parsed=parseFleet([row,{...row,Viatura:'AMA997',UnidadeLotacao:'D5/M'}],'nautical');assert.equal(parsed.length,1);assert.equal(parsed[0].hours,'289.3');assert.equal(parsed[0].condition,'OP');assert.equal(parsed[0].sisgeo,null);assert.equal(parsed[0].driver,undefined);
+ assert.equal(parseFleet([{...row,Prefixo:'BI',Viatura:'BI998'}],'nautical').length,0);
+ assert.equal(parseFleet([{...row,Prefixo:'VL',Viatura:'VL999'}],'ssmt').length,1);
+ assert.throws(()=>parseFleet([row,row],'nautical'));assert.throws(()=>parseFleet([{...row,Odometro:'desconhecido'}],'nautical'));
+ assert.equal(currentFleetService('2035-05-01',new Date('2035-05-02T10:59:59Z')),true);assert.equal(currentFleetService('2035-05-01',new Date('2035-05-02T11:00:00Z')),false);
+ await sql.query("INSERT INTO livros.nautical_equipment(id,prefix,kind,active,updated,actor) VALUES ('fleet-manual-match','AMA-998','AMA',true,'2035-01-01','99996'),('fleet-manual-only','EMBARCACAO MANUAL','Outro',true,'2035-01-01','99996')");
+ const db=globalThis.testDb;
+ let fetched=0;const loader=async()=>{fetched++;return parsed};
+ const historical=await syncFleet(db,'99996','nautical','2035-05-01',now,loader);assert.equal(historical.historical,true);assert.equal(fetched,0);
+ const beforeBooks=JSON.stringify((await sql.query('SELECT date,version,data,signature,review FROM livros.nautical_books ORDER BY date')).rows);
+ const synced=await syncFleet(db,'99996','nautical',date,now,loader);assert.equal(synced.found,true,synced.message);
+ assert.equal(synced.equipment.filter(e=>e.prefix==='AMA-998').length,1);assert.equal(synced.equipment.find(e=>e.id==='fleet-manual-match').initial_data.sisgeo.id,row.Id);
+ const inventory=mergeFleetInventory([{id:'fleet-manual-match',prefix:'AMA-998',condition:'INOP',hours:'1',driver:'99996',sisgeo:true}],synced.equipment,'nautical',date);
+ const boat=inventory.find(e=>e.id==='fleet-manual-match');assert.equal(boat.hours,'289.3');assert.equal(boat.condition,'OP');assert.equal(boat.driver,'99996');assert.equal(boat.sisgeo,null);
+ assert.ok(inventory.some(e=>e.id==='fleet-manual-only'));
+ const next=parseFleet([{...row,Id:'synthetic-2',Viatura:'RTE998',Prefixo:'RTE',Odometro:null}],'nautical');
+ const changed=await syncFleet(db,'99996','nautical',date,now,async()=>next);assert.equal(changed.found,true);
+ const updated=mergeFleetInventory(inventory,changed.equipment,'nautical',date);assert.ok(!updated.some(e=>e.id==='fleet-manual-match'));assert.ok(updated.some(e=>e.id==='fleet-manual-only'));
+ const catalog=JSON.stringify((await sql.query('SELECT * FROM livros.nautical_equipment ORDER BY id')).rows);
+ for(const bad of [async()=>[],async()=>{throw Error('offline')}])assert.equal((await syncFleet(db,'99996','nautical',date,now,bad)).found,false);
+ assert.equal(JSON.stringify((await sql.query('SELECT * FROM livros.nautical_equipment ORDER BY id')).rows),catalog);
+ assert.equal(JSON.stringify((await sql.query('SELECT date,version,data,signature,review FROM livros.nautical_books ORDER BY date')).rows),beforeBooks);
+ await post('login',{rg:'99996',password});
+ const lockedDate=(await sql.query("SELECT date FROM livros.nautical_books WHERE status='Conferido' LIMIT 1")).rows[0].date;
+ assert.equal((await(await get('op=nauticalFleet&date='+lockedDate)).json()).locked,true);
+ console.log('PASS SISGEO fleet: actual lotacao, allowed prefixes, decimal readings, no fabricated conference or driver, 08–08 window, manual merge/removal rules, failure preservation, immutable books.');
+}
