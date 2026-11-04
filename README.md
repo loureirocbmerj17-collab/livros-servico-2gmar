@@ -7,7 +7,7 @@ Aplicação independente do ChatGPT: Next.js na Vercel, PostgreSQL no Supabase. 
 - Livro do Oficial de Dia, consulta por data e acervo.
 - Importação da escala pública no Drive, incluindo motorista ASE e motorista AR/SOS; médico = chefe da guarnição ASE. Importação editável e preenchimento manual em caso de falha.
 - Estatísticas do SisGeO e importação da mensagem de encerramento, com revisão antes de aplicar.
-- Livro salvo abre somente para leitura. Autor pode usar **Retificar livro** até conferência.
+- Rascunho salvo permanece disponível para preenchimento e assinatura pelo autor. Livro assinado abre para leitura; autor pode usar **Retificar livro** até conferência.
 - Assinatura desenhada e confirmação por senha; PDF com timão e identidade visual.
 - Assinatura também pode ser importada de imagem (foto ou arquivo no computador/telefone): convertida no navegador para o mesmo formato vetorial da assinatura desenhada, com prévia antes de confirmar. Nada muda no servidor, no banco ou nos PDFs.
 - Perfil `reviewer` confere livro assinado de outro autor, com senha. Conferência bloqueia alterações também no banco.
