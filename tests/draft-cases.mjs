@@ -61,3 +61,5 @@ await act(()=>root.root.findByProps({'aria-label':'Nome manual'}).props.onChange
 await act(()=>root.root.findAllByType('button').find(b=>b.children.join('')==='Usar militar informado').props.onClick());
 assert.deepEqual(manualPerson,{rg:'54321',name:'CB TESTE MANUAL'});assert.equal(selectedRg,'54321');
 await act(()=>root.unmount());console.log('PASS controls: explicit Yes/No selection, selected state, manual military and normalized RG.');
+
+await import("./draft-signing-ui.mjs");
