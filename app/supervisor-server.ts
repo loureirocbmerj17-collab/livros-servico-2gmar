@@ -1,3 +1,4 @@
+import {captureScale} from './service-policy';
 import {manualPersonnel} from './manual-personnel';
 import {supervisorBlank,validateSupervisor} from './supervisor-model';
 import {supervisorForecast} from './supervisor-weather';
@@ -12,14 +13,14 @@ const fail=(message:string,status=400):never=>{throw Object.assign(new Error(mes
 const validDate=(date:string)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)fail('Data inválida.');};
 const rows=async(db:any,q:string,...args:any[])=>(await db.prepare(q).bind(...args).all()).results;
 const one=async(db:any,q:string,...args:any[])=>db.prepare(q).bind(...args).first();
-async function roster(c:Context,date:string){try{const s=await c.scale(date);return {found:true,responsible:assignmentRg(s.crew[5]||''),officerRg:assignmentRg(s.crew[0]||''),posts:s.beachPosts||[],source:s.source||null,warnings:s.beachWarnings||[]};}catch(e:any){return {found:false,responsible:'',officerRg:'',posts:[],source:null,warnings:[e.message||'Escala indisponível. Preencha manualmente.']};}}
+async function roster(c:Context,date:string){try{const s=await c.scale(date);return {found:true,capture:captureScale(s),responsible:assignmentRg(s.crew[5]||''),officerRg:assignmentRg(s.crew[0]||''),posts:s.beachPosts||[],source:s.source||null,warnings:s.beachWarnings||[]};}catch(e:any){return {found:false,responsible:'',officerRg:'',posts:[],source:null,warnings:[e.message||'Escala indisponível. Preencha manualmente.']};}}
 export async function supervisorGet(op:string,u:any,url:URL,c:Context){
  const date=url.searchParams.get('date')||'';
  if(op==='supervisorPeople')return rows(c.db,'SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name');
  if(op==='supervisorList')return rows(c.db,'SELECT date,author_name,status,version FROM livros.supervisor_books ORDER BY date DESC');
  if(op==='supervisorMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await rows(c.db,'SELECT * FROM livros.supervisor_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro do Supervisor neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DO SUPERVISOR',makeSupervisorPdf),`Livro-Supervisor-${month}.pdf`);}
  validDate(date);
- if(op==='supervisorContext'){const r=await roster(c,date);const d=supervisorBlank(date);d.responsible=r.responsible;d.officerRg=r.officerRg;if(r.posts.length)d.posts=r.posts;return {roster:r,blank:d};}
+ if(op==='supervisorContext'){const r=await roster(c,date);const d=supervisorBlank(date);d.responsible=r.responsible;(d as any).scaleCapture=(r as any).capture;d.officerRg=r.officerRg;if(r.posts.length)d.posts=r.posts;return {roster:r,blank:d};}
  if(op==='supervisorForecast')return supervisorForecast(date);
  if(op==='supervisorStats'){const s=await loadSisgeo(date);const unit=s.units.find((v:any)=>v.code==='2GMAR');if(!unit?.reported)fail('SISGEO sem dados confirmados para o 2º GMAR. Preencha manualmente.');return {stats:{rescues:String(unit!.rescues),lost:String(unit!.lost),preventions:String(unit!.prevention)},source:s.source};}
  const book=await one(c.db,'SELECT * FROM livros.supervisor_books WHERE date=?',date);
@@ -47,7 +48,7 @@ export async function supervisorPost(op:string,u:any,b:any,c:Context){
  const r=await roster(c,b.date);
  if(!review){if((!old||sign)&&r.responsible!==u.rg&&!events.length)fail('Seu RG deve constar como Supervisor na escala. Use Solucionar responsabilidade.',403);
  d=JSON.parse(JSON.stringify(d));delete d.signatureDrawing;delete d.assignmentAudit;delete d.personnel;delete d.scaleSource;
- d.officerRg=r.officerRg;d.scaleSource=r.source;
+ d.officerRg=r.officerRg;d.scaleSource=r.source;d.scaleCapture=(r as any).capture||JSON.parse(old?.data||'{}').scaleCapture;
  const manual=manualPersonnel(d);d.manualPersonnel=manual;
  const people=await rows(db,'SELECT rg,name,rank FROM users WHERE active=1');
  const referenced=new Set([d.responsible,d.officerRg,...d.posts.flatMap((p:any)=>p.rgs),...d.late.map((p:any)=>p.rg),...d.absent.map((p:any)=>p.rg)].filter(Boolean));

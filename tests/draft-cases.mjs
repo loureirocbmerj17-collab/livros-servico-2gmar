@@ -24,8 +24,15 @@ await act(()=>{root=create(React.createElement(ReadingWarnings,{data:{inventory:
 await act(()=>{root=create(React.createElement(SigningChecklist,{issues:['Confirme as viaturas']}));});assert.match(JSON.stringify(root.toJSON()),/Confirme as viaturas/);await act(()=>root.unmount());
 console.log('PASS UI safeguards: local autosave, explicit recovery, no signature storage, stale-version and RG isolation, reading warning and signature checklist.');
 // Supervisor interactions: all nine sections, explicit no-occurrence actions, review mode and read-only existing books.
-for(const n of ['form-controls','supervisor-panel','signature-pad','adjunto-fields'])fs.writeFileSync('.qa/'+n+'.mjs',ts.transpileModule(fs.readFileSync('app/'+n+'.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"));
+for(const n of ['captured-scale','form-controls','supervisor-panel','signature-pad','adjunto-fields'])fs.writeFileSync('.qa/'+n+'.mjs',ts.transpileModule(fs.readFileSync('app/'+n+'.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"));
 fs.writeFileSync('.qa/download.mjs',ts.transpileModule(fs.readFileSync('app/download.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText);
+const {default:CapturedScale}=await import('../.qa/captured-scale.mjs');
+const rawCapture={date:'2035-11-05',assignments:[{label:'OF. CHEFE DE OPERAÇÕES',text:'ALFA FERREIRA'}]};
+let captureFetches=0,receivedCapture;globalThis.fetch=async()=>{captureFetches++;return Response.json({found:true,capture:rawCapture});};
+await act(()=>{root=create(React.createElement(CapturedScale,{date:rawCapture.date,editable:false}));});assert.equal(captureFetches,0,'Historical books never fetch a replacement scale');await act(()=>root.unmount());
+await act(()=>{root=create(React.createElement(CapturedScale,{date:rawCapture.date,editable:false,capture:rawCapture}));});assert.match(JSON.stringify(root.toJSON()),/ALFA FERREIRA/);assert.equal(captureFetches,0);await act(()=>root.unmount());
+await act(()=>{root=create(React.createElement(CapturedScale,{date:rawCapture.date,editable:true,onCapture:c=>receivedCapture=c}));});assert.deepEqual(receivedCapture,rawCapture);assert.match(JSON.stringify(root.toJSON()),/ALFA FERREIRA/);await act(()=>root.unmount());
+console.log('PASS shared capture UI: names without RG are displayed, draft captures retained, historical snapshots never refreshed.');
 const {default:SupervisorPanel}=await import('../.qa/supervisor-panel.mjs');const {supervisorBlank}=await import('../.qa/supervisor-model.mjs');
 let savedBook=null;const sd=supervisorBlank('2026-10-31');sd.responsible='99996';
 globalThis.fetch=async(url,init)=>{const op=init?.body?JSON.parse(init.body).op:new URL(url,'https://test.local').searchParams.get('op');const responses={supervisorPeople:[{rg:'99996',name:'SUPERVISOR',rank:'SUBTEN'}],supervisorList:[],supervisorBook:savedBook,supervisorContext:{blank:sd,roster:{found:true,warnings:[]}}};return Response.json(responses[op]);};

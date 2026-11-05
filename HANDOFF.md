@@ -122,3 +122,11 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Contextos de todos os livros, validação de assinatura, busca de escala e notificações usam a resolução pelo cadastro. Nenhuma notificação real foi enviada durante os testes.
 - Oficial de Dia aplica estatísticas diretamente após consulta (inclusive ao abrir livro novo). Botão único Importar estatísticas do SISGEO, sem prévia de confirmação nem diálogo de substituição. Falha preserva campos e libera mensagem manual; resposta parcial mantém valores das unidades sem lançamento. Supervisor/Adjunto também importam pelo botão sem confirmação intermediária. Bloqueios de livros assinados/conferidos continuam válidos.
 - pnpm test e pnpm build aprovados; PDF sintético cobre nome sem RG, resolução única, sobreaviso excluído e ambiguidades; teste de interface verifica importação em um clique mesmo com valor prévio. Escala real de 05/11 retestada. Sem migração e sem livros fictícios em produção.
+
+
+## Captura compartilhada da escala — 05/11/2026
+- Alteração baseada na main f31b86f, preservando o PR #18 do Claude e os fluxos de assinatura de rascunhos.
+- Parser conserva texto da coluna de serviço mesmo sem RG, posto reconhecido ou correspondência no cadastro; mantém separado o texto original e eventual vínculo único de identidade. Sobreaviso continua excluído.
+- Os cinco livros exibem a captura por função/posto e guardam o snapshot nos dados do livro; livros assinados/conferidos não buscam uma escala nova automaticamente. Postos de praia também conservam texto sem RG.
+- Ausência de RG não apaga o nome. Seleção de usuários e autorização de assinatura continuam exigindo identificação segura ou substituição justificada existente; nenhuma conta ou RG é inventado.
+- Testes de parser PDF com e sem RG/posto/cadastro, UI de snapshot, suíte dos cinco livros e build. Sem migração, PDFs persistidos ou registros fictícios na produção.

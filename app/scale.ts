@@ -55,7 +55,7 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string,people:Sca
  const m=text.match(/SERVICO PARA O DIA\s+(\d{1,2})\s+DE\s+([A-Z]+)\s+(?:DE\s+)?(20\d{2})/);
  const serviceDate=m?`${m[3]}-${String(months.indexOf(m[2])+1).padStart(2,'0')}-${m[1].padStart(2,'0')}`:'';
  if(serviceDate!==expectedDate)throw Error('A data no conteúdo da escala não corresponde ao serviço selecionado. Nenhum dado foi importado.');
- let adjunto='',adjuntoCount=0;const serviceAssignments:{label:string,value:string}[]=[];
+ let adjunto='',adjuntoCount=0;const serviceAssignments:{label:string,value:string,rawValue:string}[]=[];
  const dayCrew:string[]=[];const nauticalOperators:string[]=[];let nauticalRow=false;
  const crew=Array(14).fill('') as string[];const evidence:{index:number,label:string,value:string}[]=[];const warnings:string[]=[];const seen=new Set<number>();
  let left=0,right=0;
@@ -66,16 +66,19 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string,people:Sca
  if(!left||!right)continue;
  if(/^(SOCORRO NOTURNO|GRDMAR|GUARDA|PRAIA ALA)/.test(joined)){left=0;right=0;continue;}
  const rawServiceValue=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').trim();
- const identity=resolveScaleName(rawServiceValue,people),serviceValue=identity.value;if(/\b\d{4,8}\b/.test(serviceValue))dayCrew.push(serviceValue);
- const label=r.items.filter(i=>i.x+i.w/2<left).map(i=>i.str).join(' ').trim();if(label&&serviceValue){serviceAssignments.push({label,value:serviceValue});if(/^ADJUNTO (?:AO |DO )?OF\.? (?:DE )?DIA$/.test(normalize(label))){adjuntoCount++;adjunto=adjuntoCount===1?serviceValue:'';}}const rule=rules.find(([,pattern])=>pattern.test(normalize(label)));if(!rule){if(!label&&nauticalRow){const continuation=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').trim();if(/\b\d{4,8}\b/.test(continuation))nauticalOperators.push(continuation);}else nauticalRow=false;continue;}
+ const identity=resolveScaleName(rawServiceValue,people),serviceValue=identity.value;if(serviceValue)dayCrew.push(serviceValue);
+ const label=r.items.filter(i=>i.x+i.w/2<left).map(i=>i.str).join(' ').trim();if(label&&serviceValue){serviceAssignments.push({label,value:serviceValue,rawValue:rawServiceValue});if(/^ADJUNTO (?:AO |DO )?OF\.? (?:DE )?DIA$/.test(normalize(label))){adjuntoCount++;adjunto=adjuntoCount===1?serviceValue:'';}}const rule=rules.find(([,pattern])=>pattern.test(normalize(label)));if(!rule){if(!label&&nauticalRow&&serviceValue){nauticalOperators.push(serviceValue);serviceAssignments.push({label:'Náutica · continuação',value:serviceValue,rawValue:rawServiceValue});}else nauticalRow=false;continue;}
  nauticalRow=[8,9,10].includes(rule[0]);
  const value=serviceValue.replace(/\s+/g,' ').trim();
- if(!/\b\d{4,8}\b/.test(value)){if(!identity.named){warnings.push(label+': sem militar identificado; preenchimento manual.');continue;}warnings.push(label+': nome importado, mas a escala não informa RG e não há correspondência única de nome e posto no cadastro. Confirme o RG antes de assinar.');}
+ if(!value){warnings.push(label+': campo vazio na coluna de serviço.');continue;}
+ // Capture is independent of identification. Even an unregistered name,
+ // unfamiliar rank abbreviation or service instruction must survive import.
+ if(!/\b\d{4,8}\b/.test(value))warnings.push(label+': texto importado conforme a escala, sem RG vinculado.');
  if(identity.resolved)warnings.push(label+': RG identificado pelo nome e posto no cadastro; a escala informa somente o nome.');
  if(nauticalRow)nauticalOperators.push(value);
  if(seen.has(rule[0])){crew[rule[0]]='';const prior=evidence.findIndex(e=>e.index===rule[0]);if(prior>=0)evidence.splice(prior,1);warnings.push(label+': mais de uma linha encontrada; confira manualmente.');continue;}
  seen.add(rule[0]);crew[rule[0]]=value;evidence.push({index:rule[0],label,value});}
- if(!crew.some(Boolean))throw Error('O formato das colunas não foi reconhecido com segurança. Preencha a ala manualmente.');
+ if(!serviceAssignments.length)throw Error('O formato das colunas não foi reconhecido com segurança. Preencha a ala manualmente.');
  const beachRows=[...rows];
  for(let number=2;number<=doc.numPages;number++){const content=await (await doc.getPage(number)).getTextContent();const extra:Row[]=[];for(const item of (content.items as any[]).filter(x=>typeof x.str==='string'&&x.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5])){let r=extra.find(r=>Math.abs(r.y-item.transform[5])<2.7);if(!r){r={y:item.transform[5],items:[]};extra.push(r);}r.items.push({str:item.str,x:item.transform[4],w:item.width});}for(const r of extra)r.items.sort((a,b)=>a.x-b.x);beachRows.push(...extra);}
  return {...parseBeachRows(beachRows),adjunto,serviceAssignments,serviceDate,crew,evidence,warnings,dayCrew,nauticalOperators:[...new Set(nauticalOperators)]};

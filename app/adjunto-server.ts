@@ -1,3 +1,4 @@
+import {captureScale} from './service-policy';
 import {manualPersonnel} from './manual-personnel';
 import {adjuntoBlank,validateAdjunto} from './adjunto-model';
 import {supervisorForecast as adjuntoForecast} from './supervisor-weather';
@@ -12,14 +13,14 @@ const fail=(message:string,status=400):never=>{throw Object.assign(new Error(mes
 const validDate=(date:string)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)fail('Data inválida.');};
 const rows=async(db:any,q:string,...args:any[])=>(await db.prepare(q).bind(...args).all()).results;
 const one=async(db:any,q:string,...args:any[])=>db.prepare(q).bind(...args).first();
-async function roster(c:Context,date:string){try{const s=await c.scale(date);return {found:true,responsible:assignmentRg(s.adjunto||''),officerRg:assignmentRg(s.crew[0]||''),assignments:s.serviceAssignments||[],crew:s.crew,posts:s.beachPosts||[],source:s.source||null,warnings:s.beachWarnings||[]};}catch(e:any){return {found:false,responsible:'',officerRg:'',assignments:[],crew:[],posts:[],source:null,warnings:[e.message||'Escala indisponível. Preencha manualmente.']};}}
+async function roster(c:Context,date:string){try{const s=await c.scale(date);return {found:true,capture:captureScale(s),responsible:assignmentRg(s.adjunto||''),officerRg:assignmentRg(s.crew[0]||''),assignments:s.serviceAssignments||[],crew:s.crew,posts:s.beachPosts||[],source:s.source||null,warnings:s.beachWarnings||[]};}catch(e:any){return {found:false,responsible:'',officerRg:'',assignments:[],crew:[],posts:[],source:null,warnings:[e.message||'Escala indisponível. Preencha manualmente.']};}}
 export async function adjuntoGet(op:string,u:any,url:URL,c:Context){
  const date=url.searchParams.get('date')||'';
  if(op==='adjuntoPeople')return rows(c.db,'SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name');
  if(op==='adjuntoList')return rows(c.db,'SELECT date,author_name,status,version FROM livros.adjunto_books ORDER BY date DESC');
  if(op==='adjuntoMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await rows(c.db,'SELECT * FROM livros.adjunto_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro do Adjunto neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DO ADJUNTO',makeAdjuntoPdf),`Livro-Adjunto-${month}.pdf`);}
  validDate(date);
- if(op==='adjuntoContext'){const r=await roster(c,date);const d=adjuntoBlank(date);d.responsible=r.responsible;d.officerRg=r.officerRg;if(r.posts.length)d.activation.total=String(new Set(r.posts.flatMap((p:any)=>p.rgs)).size);
+ if(op==='adjuntoContext'){const r=await roster(c,date);const d=adjuntoBlank(date);d.responsible=r.responsible;(d as any).scaleCapture=(r as any).capture;d.officerRg=r.officerRg;if(r.posts.length)d.activation.total=String(new Set(r.posts.flatMap((p:any)=>p.rgs)).size);
  const values=[r.crew[0],r.crew[1],r.crew[11],r.crew[4],undefined,[r.crew[8],r.crew[9],r.crew[10]].filter(Boolean).join('; '),r.crew[6],r.crew[7],r.crew[12],r.crew[13]];
  d.serviceCrew=d.serviceCrew.map((row:any,i:number)=>({...row,military:values[i]||r.assignments.filter((a:any)=>i===4?/PERMANENCIA/i.test(a.label):i===10?/APROVISIONAMENTO|APROVISIONADOR/i.test(a.label):i>=11?new RegExp('SUPERVISOR.*SETOR.*'+(i-10),'i').test(a.label):false).map((a:any)=>a.value).join('; ')}));return {roster:r,blank:d};}
  if(op==='adjuntoForecast')return adjuntoForecast(date);
@@ -49,7 +50,7 @@ export async function adjuntoPost(op:string,u:any,b:any,c:Context){
  const r=await roster(c,b.date);
  if(!review){if((!old||sign)&&r.responsible!==u.rg&&!events.length)fail('Seu RG deve constar como Adjunto na escala. Use Solucionar responsabilidade.',403);
  d=JSON.parse(JSON.stringify(d));delete d.signatureDrawing;delete d.assignmentAudit;delete d.personnel;delete d.scaleSource;
- d.officerRg=r.officerRg;d.scaleSource=r.source;d.rosterSnapshot=r.found?{assignments:r.assignments,adjunto:r.responsible}:old?JSON.parse(old.data).rosterSnapshot:null;
+ d.officerRg=r.officerRg;d.scaleSource=r.source;d.scaleCapture=(r as any).capture||JSON.parse(old?.data||'{}').scaleCapture;d.rosterSnapshot=r.found?{assignments:r.assignments,adjunto:r.responsible}:old?JSON.parse(old.data).rosterSnapshot:null;
  const manual=manualPersonnel(d);d.manualPersonnel=manual;
  const people=await rows(db,'SELECT rg,name,rank FROM users WHERE active=1');
  const referenced=new Set([d.responsible,d.officerRg,...d.posts.flatMap((p:any)=>p.rgs),...d.late.map((p:any)=>p.rg),...d.absent.map((p:any)=>p.rg),...d.swaps.flatMap((p:any)=>[p.outgoing,p.incoming])].filter(Boolean));
