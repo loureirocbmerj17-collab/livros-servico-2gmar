@@ -42,11 +42,14 @@ for(const kind of ['supervisor','adjunto','nautical','ssmt','officer']){
   const nav=root.root.findAllByType('nav').find(n=>n.props.className==='nautical-tabs'||n.props['aria-label']==='Seções do Supervisor');
   const buttons=nav.findAllByType('button');await act(()=>buttons.at(-1).props.onClick());
  }
- assert.ok(button(signature),kind+' saved draft exposes signature');await click(signature);
+ assert.ok(button(signature),kind+' saved draft exposes signature');
+ if(kind==='supervisor'||kind==='adjunto'){assert.equal(button('Próxima seção'),undefined,kind+' last section shows signature instead of next');await click('Salvar rascunho');assert.ok(button(signature),kind+' signature stays available after saving draft');assert.equal(button('Retificar livro'),undefined);}
+ await click(signature);
  assert.ok(!root.root.findAllByProps({className:'overlay'}).length,kind+' incomplete draft must show pending fields, not signature modal');
  assert.match(text(root.root),/Informe|Complete|Confirme|Revise|Identifique|Selecione/);
  await act(()=>root.unmount());
- stored={...stored,author:'88888'};await mount();assert.equal(button('Salvar rascunho'),undefined,kind+' another author cannot edit');await act(()=>root.unmount());
+ stored={...stored,author:'88888'};await mount();assert.equal(button('Salvar rascunho'),undefined,kind+' another author cannot edit');if(kind==='supervisor'||kind==='adjunto')assert.equal(button(signature),undefined,kind+' another author cannot sign');await act(()=>root.unmount());
+ if(kind==='supervisor'||kind==='adjunto'){await act(()=>{root=create(React.createElement(Page,{user,kind:kind==='adjunto'?'adjunto':undefined,onDirty:()=>{}}));});assert.match(text(root.root),/Escolha o dia do serviço/);assert.match(text(root.root),new RegExp('Serviços do '+(kind==='adjunto'?'Adjunto':'Supervisor')));assert.ok(button('Abrir serviço'));await act(()=>root.unmount());}
  stored={...stored,author:user.rg,status:'Assinado'};await mount();assert.ok(button('Retificar livro'),kind+' signed content needs explicit retification');await act(()=>root.unmount());
  stored={...stored,status:'Conferido'};await mount();assert.equal(button('Salvar rascunho'),undefined);assert.equal(button('Retificar livro'),undefined);await act(()=>root.unmount());
  console.log('PASS draft signing UI: '+kind+' saved/reopened draft, save, validation, ownership and signed/reviewed locks.');
