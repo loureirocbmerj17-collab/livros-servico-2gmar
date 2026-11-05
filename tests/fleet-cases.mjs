@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 export async function run({sql,get,post,password}){
- const {parseFleet,currentFleetService,syncFleet}=await import('../.qa/sisgeo-fleet.mjs');
+ const {parseFleet,currentFleetService,syncFleet,parseChecklist,checklistTime,enrichFleet}=await import('../.qa/sisgeo-fleet.mjs');
  const {mergeFleetInventory}=await import('../.qa/fleet-inventory.mjs');
  const now=new Date('2035-05-02T12:00:00Z'),date='2035-05-02';
  const row={Id:'synthetic-fleet-1',Viatura:'AMA998',Prefixo:'AMA',UnidadeLotacao:'2GMAR',Situacao:1,Odometro:'289,3',ConferenciaViatura:'10',SituacaoOperacional:'Indisponível (Sem RH)',Guarnicao:'NÃO COPIAR',Conferente:'NÃO COPIAR'};
@@ -9,6 +9,23 @@ export async function run({sql,get,post,password}){
  assert.equal(parseFleet([{...row,Prefixo:'VL',Viatura:'VL999'}],'ssmt').length,1);
  assert.throws(()=>parseFleet([row,row],'nautical'));assert.throws(()=>parseFleet([{...row,Odometro:'desconhecido'}],'nautical'));
  assert.equal(currentFleetService('2035-05-01',new Date('2035-05-02T10:59:59Z')),true);assert.equal(currentFleetService('2035-05-01',new Date('2035-05-02T11:00:00Z')),false);
+ const check={Id:100,IdItem:10,Viatura:'AMA998',Conferencia:0,DataCadastro:'02/05/2035 08:30:00',Odometro:'1',Militar:'NUNCA COPIAR'};
+ assert.equal(checklistTime('31/02/2035 08:00:00'),null);assert.equal(checklistTime('02/05/2035 24:00:00'),null);
+ assert.equal(parseChecklist([check],'AMA998',date,now),'2035-05-02T11:30:00.000Z');
+ for(const change of [{DataCadastro:null},{Viatura:null,IdItem:null},{Viatura:'AMA999'},{Conferencia:null},{DataCadastro:'02/05/2035 07:59:59'},{DataCadastro:'02/05/2035 10:00:00'}])assert.equal(parseChecklist([{...check,...change}],'AMA998',date,now),null);
+ const afterService=new Date('2035-05-03T12:00:00Z');
+ assert.equal(parseChecklist([{...check,DataCadastro:'03/05/2035 07:59:59'}],'AMA998',date,afterService),'2035-05-03T10:59:59.000Z');
+ assert.equal(parseChecklist([{...check,DataCadastro:'03/05/2035 08:00:00'}],'AMA998',date,afterService),null);
+ assert.throws(()=>parseChecklist({html:'login'},'AMA998',date,now));
+ const calls=[];const enriched=await enrichFleet(parsed,date,now,async(endpoint,payload)=>{calls.push({endpoint,payload});return [check]});
+ assert.equal(enriched[0].sisgeo,true);assert.equal(enriched[0].hours,'289.3');assert.equal(enriched[0].driver,undefined);assert.equal(enriched[0].Militar,undefined);assert.equal(enriched[0].conferenceStatus,'confirmed');
+ assert.deepEqual(calls,[{endpoint:'GetViaturaConferenciaViatura',payload:{viatura:'AMA998',data:'2035-05-02 00:00:00'}}]);
+ const overnightCalls=[];const overnight=await enrichFleet(parsed,date,new Date('2035-05-03T10:00:00Z'),async(endpoint,payload)=>{overnightCalls.push(payload.data);return [{...check,DataCadastro:payload.data.startsWith('2035-05-03')?'03/05/2035 06:00:00':check.DataCadastro}]});
+ assert.deepEqual(overnightCalls,['2035-05-02 00:00:00','2035-05-03 00:00:00']);assert.equal(overnight[0].conferenceAt,'2035-05-03T09:00:00.000Z');
+ const blank=await enrichFleet([{...parsed[0],hours:''}],date,now,async(endpoint)=>endpoint==='GetViaturaOdometroAtual'?'321,5':[{...check,Viatura:null,DataCadastro:null,IdItem:null}]);assert.equal(blank[0].hours,'321.5');assert.equal(blank[0].sisgeo,null);assert.equal(blank[0].conferenceStatus,'not_found');
+ const failed=await enrichFleet(parsed,date,now,async()=>{throw Error('offline')});assert.equal(failed[0].sisgeo,null);assert.equal(failed[0].conferenceStatus,'unavailable');assert.equal(failed[0].hours,'289.3');
+ let active=0,peak=0;const bounded=await enrichFleet(Array.from({length:12},(_,i)=>({...parsed[0],key:'AMA'+i})),date,now,async(_e,_p,signal)=>{active++;peak=Math.max(peak,active);try{await new Promise((resolve,reject)=>{signal.addEventListener('abort',()=>reject(Error('timeout')),{once:true});});}finally{active--;}},10);
+ assert.equal(peak,4);assert.equal(active,0);assert.ok(bounded.every(r=>r.conferenceStatus==='unavailable'));
  await sql.query("INSERT INTO livros.nautical_equipment(id,prefix,kind,active,updated,actor) VALUES ('fleet-manual-match','AMA-998','AMA',true,'2035-01-01','99996'),('fleet-manual-only','EMBARCACAO MANUAL','Outro',true,'2035-01-01','99996')");
  const db=globalThis.testDb;
  let fetched=0;const loader=async()=>{fetched++;return parsed};
@@ -19,6 +36,9 @@ export async function run({sql,get,post,password}){
  const inventory=mergeFleetInventory([{id:'fleet-manual-match',prefix:'AMA-998',condition:'INOP',hours:'1',driver:'99996',sisgeo:true}],synced.equipment,'nautical',date);
  const boat=inventory.find(e=>e.id==='fleet-manual-match');assert.equal(boat.hours,'289.3');assert.equal(boat.condition,'OP');assert.equal(boat.driver,'99996');assert.equal(boat.sisgeo,null);
  assert.ok(inventory.some(e=>e.id==='fleet-manual-only'));
+ const confirmedSync=await syncFleet(db,'99996','nautical',date,now,async()=>enriched);
+ const confirmedBoat=mergeFleetInventory(inventory,confirmedSync.equipment,'nautical',date).find(e=>e.id==='fleet-manual-match');
+ assert.equal(confirmedBoat.sisgeo,true);assert.equal(confirmedBoat.fleetSource.conferenceAt,'2035-05-02T11:30:00.000Z');assert.equal(confirmedBoat.driver,'99996');assert.equal(confirmedBoat.hours,'289.3');
  const next=parseFleet([{...row,Id:'synthetic-2',Viatura:'RTE998',Prefixo:'RTE',Odometro:null}],'nautical');
  const changed=await syncFleet(db,'99996','nautical',date,now,async()=>next);assert.equal(changed.found,true);
  const updated=mergeFleetInventory(inventory,changed.equipment,'nautical',date);assert.ok(!updated.some(e=>e.id==='fleet-manual-match'));assert.ok(updated.some(e=>e.id==='fleet-manual-only'));

@@ -7,7 +7,7 @@ export function mergeFleetInventory(current:any[],equipment:any[],kind:'nautical
   const old=current.find(i=>i.id===e.id)||current.find(i=>key(i.prefix)===key(e.prefix));
   const initial=e.initial_data||{},source=initial.sisgeo,live=source?.serviceDate===date;
   const item={id:e.id,prefix:e.prefix,kind:e.kind,condition:old?.condition||initial.condition||'',location:old?.location||initial.location||(kind==='nautical'?'Galpão Náutica':'2º GMAR'),hours:old?.hours??initial.hours??'',previousHours:old?.previousHours||old?.hours||'',unavailable:old?.unavailable||false,unavailableReason:old?.unavailableReason||'',note:old?.note||'',driver:old?.driver||'',sisgeo:old?.sisgeo??null,...old};
-  if(live)return {...item,id:e.id,prefix:e.prefix,condition:source.condition,hours:source.hours,unavailable:false,unavailableReason:'',sisgeo:null,fleetSource:source};
+  if(live)return {...item,id:e.id,prefix:e.prefix,condition:source.condition,hours:source.hours,unavailable:false,unavailableReason:'',sisgeo:source.conferenceAt?true:null,fleetSource:source};
   return item;
  });
  // Only exclusively manual rows survive absence from the remote fleet.
