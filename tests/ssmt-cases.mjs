@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';
 export async function run({post,get,sql,drawing,password,qa}){
+const {servicePersonnel,ssmtDriverOptions}=await import('../.qa/ssmt-model.mjs');
+const personnel=[{rg:'10001',rank:'CABO',name:'Antigo CB'},{rg:'20002',rank:'CABO',name:'Moderno CB'},{rg:'30003',rank:'1º TENENTE',name:'Ten'},{rg:'40004',rank:'SUBTENENTE',name:'ST'},{rg:'50005',rank:'3º SARGENTO',name:'Sgt'},{rg:'60006',rank:'MAJOR',name:'Fora do serviço'}];
+const selected=servicePersonnel({crew:['CB RG 010001 / CB RG 20002','1º TEN RG 30003'],dayCrew:['SUBTEN RG 40004'],beachPosts:[{rgs:['50005']}],sobreaviso:['MAJ RG 60006']},personnel);
+assert.deepEqual(ssmtDriverOptions({servicePersonnel:selected},personnel).map(p=>p.value),['30003','40004','50005','10001','20002']);
+assert.deepEqual(ssmtDriverOptions({servicePersonnel:[]},personnel),[]);
+assert.deepEqual(ssmtDriverOptions({manualRosterId:1,operators:[personnel[1]],dayCrew:[],servicePersonnel:selected},personnel).map(p=>p.value),['20002']);
 const date='2026-12-12';await post('login',{rg:'99999',password});await sql.query("INSERT INTO livros.settings(key,value) VALUES('ssmtChief','99997')");
 const eq=await post('ssmtEquipmentSave',{prefix:'ASE-TESTE',kind:'ASE',active:true,initial_data:{hours:'100',location:'2º GMAR',condition:'OP'}});
 globalThis.scaleCrew=Array(14).fill('');globalThis.scaleCrew[0]='CAP RG 99998 OFICIAL';globalThis.scaleCrew[12]='CB RG 99996 MOTORISTA';globalThis.scaleCrew[13]='CB RG 99996 MOTORISTA';
 await post('login',{rg:'99996',password});const c=await(await get('op=ssmtContext&date='+date)).json();assert.equal(c.blank.operators.length,1);assert.equal(c.blank.chiefDriverRg,'99996');assert.equal(c.blank.inventory[0].sisgeo,null);
+assert.deepEqual(c.blank.servicePersonnel.map(p=>p.rg).sort(),['99996','99998']);
+assert.deepEqual((await(await get('op=ssmtRoster&date='+date)).json()).servicePersonnel,c.blank.servicePersonnel);
 const d={...c.blank,responsible:'99996',confirmed:true};d.inventory=d.inventory.map(v=>({...v,driver:'99996',sisgeo:true}));
 d.inventory=d.inventory.map(v=>({...v,driver:''}));d.refuels=[{invalid:true}];
 await post('ssmtSave',{date,version:0,data:d});const next=await(await get('op=ssmtContext&date=2026-12-13')).json();assert.equal(next.blank.inventory[0].hours,'100');assert.equal(next.blank.inventory[0].condition,'OP');await post('ssmtSign',{date,version:1,data:d,password,drawing});

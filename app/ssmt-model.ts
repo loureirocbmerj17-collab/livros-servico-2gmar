@@ -1,3 +1,17 @@
+import {personLabel} from './person-label';
+import {normalizeRg} from './service-policy';
+const seniorityRanks=[['CORONEL','CEL'],['TENENTE CORONEL','TEN CEL'],['MAJOR','MAJ'],['CAPITAO','CAP'],['1 TENENTE','1 TEN'],['2 TENENTE','2 TEN'],['ASPIRANTE','ASPIRANTE A OFICIAL','ASP OF'],['SUBTENENTE','SUBTEN','ST'],['1 SARGENTO','1 SGT'],['2 SARGENTO','2 SGT'],['3 SARGENTO','3 SGT'],['CABO','CB'],['SOLDADO','SD']];
+function rankOrder(rank:string){const normalized=String(rank||'').normalize('NFD').replace(/[\u0300-\u036fº°ª.]/g,'').toUpperCase().replace(/\s+/g,' ').trim();const index=seniorityRanks.findIndex(aliases=>aliases.includes(normalized));return index<0?99:index;}
+export function servicePersonnel(scale:any,people:any[]){
+ const lines=[...(scale.dayCrew||[]),...(scale.crew||[]),...(scale.nauticalOperators||[]),scale.adjunto||''];
+ const rgs=new Set([...lines.flatMap((line:string)=>(String(line).match(/\b\d{4,8}\b/g)||[]).map(normalizeRg)),...(scale.beachPosts||[]).flatMap((post:any)=>(post.rgs||[]).map(normalizeRg))]);
+ return people.filter(p=>rgs.has(normalizeRg(p.rg))).map(p=>({rg:normalizeRg(p.rg),name:p.name,rank:p.rank||''}));
+}
+export function ssmtDriverOptions(data:any,people:any[]){
+ const roster=data?.manualRosterId?[...(data.operators||[]),...(data.dayCrew||[])]:data?.servicePersonnel??[...(data?.operators||[]),...(data?.dayCrew||[])];
+ const unique=new Map<string,any>();for(const entry of roster){const rg=normalizeRg(entry.rg);if(!rg||unique.has(rg))continue;const person=people.find(p=>normalizeRg(p.rg)===rg)||entry;unique.set(rg,{...person,rg});}
+ return [...unique.values()].sort((a,b)=>rankOrder(a.rank)-rankOrder(b.rank)||Number(a.rg)-Number(b.rg)).map(p=>({value:p.rg,label:personLabel(p)+' · RG '+p.rg}));
+}
 export const operationalStockEquipment='Mat Operacional/Estoque';
 export const ssmtSections=['Militares','Viaturas','Ocorrências','Assinaturas'];
 export const equipmentKinds=['AR','ASE','V1','V4','VL','Outra'];
