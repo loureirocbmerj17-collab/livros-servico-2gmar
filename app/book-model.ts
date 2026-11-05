@@ -28,3 +28,10 @@ export function lines(d:any){const total=(a:any[])=>a?.some(v=>v==='')?'Não inf
 '11. ALTERAÇÕES COM EMBARCAÇÕES',d.boats||'Sem alterações','',
 '12. OCORRÊNCIAS (DESAPARECIDOS, ÓBITOS E OUTROS SOCORROS)',d.occurrences||'Sem alterações','',
 '13. OUTRAS OBSERVAÇÕES',d.notes||'Sem alterações'];}
+// Partial SISGEO responses never clear fields for units without a report.
+export function applySisgeoData(current:any,result:any,date:string){
+ if(!current||current.date!==date||!result?.found||result.date!==date)return current;
+ const patch={...result.patch};
+ for(const key of ['prevention','rescues'])patch[key]=patch[key].map((value:string,i:number)=>value===''?current[key][i]:value);
+ return {...current,...patch,sisgeoSource:'SisGeO · '+date.split('-').reverse().join('/')+' · '+new Date(result.source.queriedAt).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})};
+}

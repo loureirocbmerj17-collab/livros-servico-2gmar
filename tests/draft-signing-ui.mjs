@@ -17,6 +17,7 @@ for(const kind of ['supervisor','adjunto','nautical','ssmt','officer']){
  const prefix=kind==='officer'?'':kind;
  const model=await import('../.qa/'+({nautical:'nautica',officer:'book'}[kind]||kind)+'-model.mjs');
  const d=(model.supervisorBlank||model.adjuntoBlank||model.nauticalBlank||model.ssmtBlank||model.blank)('2032-05-01');d.responsible=user.rg;
+ if(kind==='officer')d.prevention[0]='99';
  let stored={date:d.date,author:user.rg,author_name:'TESTE',status:'Rascunho',version:1,data:d};
  const Page=(await import('../.qa/'+({supervisor:'supervisor-panel',adjunto:'supervisor-panel',nautical:'nautica-panel',ssmt:'ssmt-panel',officer:'page'}[kind])+'.mjs')).default;
  globalThis.window.location.search=kind==='officer'?'?book=officer&date='+d.date:'';
@@ -27,11 +28,14 @@ for(const kind of ['supervisor','adjunto','nautical','ssmt','officer']){
   if(op==='me')return Response.json({user,setup:false});
   if(op==='dayPersonnel')return Response.json({people:[]});
   if(op==='operationalOverview')return Response.json({});
+  if(op==='sisgeo')return Response.json({found:true,date:d.date,patch:{prevention:['7','','',''],rescues:['0','','','']},source:{queriedAt:'2032-05-01T21:00:00Z'},units:[],warnings:[]});
   return Response.json([]);
  };
  const mount=async()=>{await act(()=>{root=create(React.createElement(Page,{user,kind:kind==='adjunto'?'adjunto':undefined,initialDate:d.date,onDirty:()=>{}}));});};
  await mount();assert.ok(button('Salvar rascunho'),kind+' saved draft must remain editable');assert.equal(button('Retificar livro'),undefined);
+ if(kind==='officer'){globalThis.confirm=()=>{throw Error('Statistics must import without confirmation')};await click('Importar estatísticas do SISGEO');assert.equal(button('Aplicar estatísticas ao livro'),undefined);}
  await click('Salvar rascunho');assert.ok(button('Salvar rascunho'),kind+' save keeps draft editable');
+ if(kind==='officer'){assert.equal(stored.data.prevention[0],'7');assert.equal(stored.data.rescues[0],'0');}
  const signature=kind==='officer'?'Assinar e enviar para conferência':kind==='supervisor'?'Assinar livro do Supervisor':kind==='adjunto'?'Assinar livro do Adjunto':'Assinar como responsável';
  // Advance through sections using their actual navigation labels.
  if(kind==='officer'){for(let i=0;i<6;i++)await click('Próxima etapa ');}else{

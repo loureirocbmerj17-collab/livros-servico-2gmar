@@ -28,7 +28,21 @@ const rules:[number,RegExp][]=[
  [6,/^CHEFE DA GUARNICAO ASE \d+$/],[7,/^GUARNICAO ASE \d+(?: \(24X72\))?$/],
  [8,/^MOTO AQUATICA(?: 0?1)? \(24H\)$/],[9,/^MOTO AQUATICA 0?2 \(24H\)$/],[10,/^MOTO AQUATICA AMA-E$/],[11,/^COMAT\s*\/\s*SOP$/], [12,/^MOT\.? ASE ?\d+$/], [13,/^(?:ENCARREGADO DE MOT\/)?MOT\.? AR[-– ]+SOS$/], [14,/^ENCARREGADO DE (?:MOTORISTAS|MOTORISTA|MOT\.?)$/]
 ];
-export async function parseScale(bytes:Uint8Array,expectedDate:string){
+type ScalePerson={rg:string,name:string,rank:string};
+function namedMilitary(value:string){
+ const text=normalize(value).replace(/[º°ª.]/g,'');
+ const aliases:[string,string][]=[['TENENTE CORONEL','TC'],['TEN CEL','TC'],['CORONEL','CEL'],['CEL','CEL'],['MAJOR','MAJ'],['MAJ','MAJ'],['CAPITAO','CAP'],['CAP','CAP'],['SUBTENENTE','ST'],['SUBTEN','ST'],['ST','ST'],['1 TENENTE','1TEN'],['1 TEN','1TEN'],['2 TENENTE','2TEN'],['2 TEN','2TEN'],['1 SARGENTO','1SGT'],['1 SGT','1SGT'],['2 SARGENTO','2SGT'],['2 SGT','2SGT'],['3 SARGENTO','3SGT'],['3 SGT','3SGT'],['CABO','CB'],['CB','CB'],['SOLDADO','SD'],['SD','SD']];
+ const alias=aliases.find(([label])=>text.startsWith(label+' '));if(!alias)return null;
+ const name=text.slice(alias[0].length).trim().replace(/^BM\s+/,'');
+ return /^[A-Z][A-Z '\-]+$/.test(name)?{rank:alias[1],name}:null;
+}
+export function resolveScaleName(value:string,people:ScalePerson[]=[]){
+ if(/\b\d{4,8}\b/.test(value))return {value,resolved:false,named:false};
+ const parsed=namedMilitary(value);if(!parsed)return {value,resolved:false,named:false};
+ const matches=people.filter(p=>{const candidate=namedMilitary(p.rank+' '+p.name);return candidate?.rank===parsed.rank&&candidate.name===parsed.name&&/^\d{3,12}$/.test(p.rg);});
+ return {value:matches.length===1?value+' RG '+matches[0].rg.replace(/^0+/,''):value,resolved:matches.length===1,named:true};
+}
+export async function parseScale(bytes:Uint8Array,expectedDate:string,people:ScalePerson[]=[]){
  if(bytes.length>5*1024*1024)throw Error('PDF acima do limite de 5 MB. Preencha manualmente.');
  if(new TextDecoder().decode(bytes.slice(0,5))!=='%PDF-')throw Error('O Drive não retornou um PDF acessível. Preencha manualmente.');
  const doc=await getDocumentProxy(bytes,{useSystemFonts:false});
@@ -51,11 +65,13 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string){
  if(a&&b&&c){left=(a.x+a.w/2+b.x+b.w/2)/2;right=(b.x+b.w/2+c.x+c.w/2)/2;}else{left=0;right=0;}continue;}
  if(!left||!right)continue;
  if(/^(SOCORRO NOTURNO|GRDMAR|GUARDA|PRAIA ALA)/.test(joined)){left=0;right=0;continue;}
- const serviceValue=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').trim();if(/\b\d{4,8}\b/.test(serviceValue))dayCrew.push(serviceValue);
+ const rawServiceValue=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').trim();
+ const identity=resolveScaleName(rawServiceValue,people),serviceValue=identity.value;if(/\b\d{4,8}\b/.test(serviceValue))dayCrew.push(serviceValue);
  const label=r.items.filter(i=>i.x+i.w/2<left).map(i=>i.str).join(' ').trim();if(label&&serviceValue){serviceAssignments.push({label,value:serviceValue});if(/^ADJUNTO (?:AO |DO )?OF\.? (?:DE )?DIA$/.test(normalize(label))){adjuntoCount++;adjunto=adjuntoCount===1?serviceValue:'';}}const rule=rules.find(([,pattern])=>pattern.test(normalize(label)));if(!rule){if(!label&&nauticalRow){const continuation=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').trim();if(/\b\d{4,8}\b/.test(continuation))nauticalOperators.push(continuation);}else nauticalRow=false;continue;}
  nauticalRow=[8,9,10].includes(rule[0]);
- const value=r.items.filter(i=>i.x+i.w/2>=left&&i.x+i.w/2<right).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
- if(!/\b\d{4,8}\b/.test(value)){warnings.push(label+': sem militar identificado; preenchimento manual.');continue;}
+ const value=serviceValue.replace(/\s+/g,' ').trim();
+ if(!/\b\d{4,8}\b/.test(value)){if(!identity.named){warnings.push(label+': sem militar identificado; preenchimento manual.');continue;}warnings.push(label+': nome importado, mas a escala não informa RG e não há correspondência única de nome e posto no cadastro. Confirme o RG antes de assinar.');}
+ if(identity.resolved)warnings.push(label+': RG identificado pelo nome e posto no cadastro; a escala informa somente o nome.');
  if(nauticalRow)nauticalOperators.push(value);
  if(seen.has(rule[0])){crew[rule[0]]='';const prior=evidence.findIndex(e=>e.index===rule[0]);if(prior>=0)evidence.splice(prior,1);warnings.push(label+': mais de uma linha encontrada; confira manualmente.');continue;}
  seen.add(rule[0]);crew[rule[0]]=value;evidence.push({index:rule[0],label,value});}
@@ -76,7 +92,7 @@ async function publicRead(url:string,max:number,signal:AbortSignal){
  const out=new Uint8Array(length);let pos=0;for(const c of chunks){out.set(c,pos);pos+=c.length;}return out;
  }throw Error('O Drive excedeu o limite de redirecionamentos.');
 }
-export async function loadScale(folder:string,date:string){
+export async function loadScale(folder:string,date:string,people:ScalePerson[]=[]){
  const signal=AbortSignal.timeout(25000);let html=new TextDecoder().decode(await publicRead(`https://drive.google.com/drive/folders/${folderId(folder)}`,4*1024*1024,signal));
  // Pasta do ano: confere o ano no nome e entra na subpasta do mês do serviço.
  const month=monthFolder(folderSubfolders(html),date);
@@ -86,5 +102,5 @@ export async function loadScale(folder:string,date:string){
  if(!files.length)throw Error('A listagem pública da pasta não está disponível ou não contém Google Docs ou PDFs. O preenchimento manual continua disponível.');
  if(!candidates.length)throw Error('Escala não localizada para este dia na listagem pública da pasta. Preencha manualmente.');
  const file=newestScale(candidates);const bytes=await publicRead(file.type==='doc'?`https://docs.google.com/document/d/${file.id}/export?format=pdf`:`https://drive.google.com/uc?export=download&id=${file.id}`,5*1024*1024,signal);
- const result=await parseScale(bytes,date);if(candidates.length>1)result.warnings.push('Foram encontradas '+candidates.length+' escalas para este dia. Importada a mais recentemente modificada: '+file.name+'.');return {...result,source:{id:file.id,name:file.name,type:file.type,modifiedAt:file.modifiedAt?new Date(file.modifiedAt).toISOString():null,url:file.type==='doc'?`https://docs.google.com/document/d/${file.id}/edit`:`https://drive.google.com/file/d/${file.id}/view`,folderUrl:`https://drive.google.com/drive/folders/${folder}`,checkedAt:new Date().toISOString()}};
+ const result=await parseScale(bytes,date,people);if(candidates.length>1)result.warnings.push('Foram encontradas '+candidates.length+' escalas para este dia. Importada a mais recentemente modificada: '+file.name+'.');return {...result,source:{id:file.id,name:file.name,type:file.type,modifiedAt:file.modifiedAt?new Date(file.modifiedAt).toISOString():null,url:file.type==='doc'?`https://docs.google.com/document/d/${file.id}/edit`:`https://drive.google.com/file/d/${file.id}/view`,folderUrl:`https://drive.google.com/drive/folders/${folder}`,checkedAt:new Date().toISOString()}};
 }
