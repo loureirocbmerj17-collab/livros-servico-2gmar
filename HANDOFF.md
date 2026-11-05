@@ -109,3 +109,9 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Quatro consultas simultâneas, prazo global de 15s para checklists, limite de 5s por consulta. Falha parcial conserva a importação de condição/leitura e sinaliza checklist indisponível para nova tentativa. GetViaturaOdometroAtual é fallback quando a listagem não trouxer leitura; leitura antiga do checklist nunca substitui a atual.
 - Conferente não é importado nem atribuído como condutor. Cadastros manuais, bloqueios, livros históricos e assinaturas preservados. Sem migração; apenas metadados nos JSON já existentes. PDFs seguem sob demanda.
 - pnpm test e pnpm build aprovados. Testes sintéticos cobrem template vazio, conferência válida, viatura errada, data inválida/futura, limites 08–08, consulta de dois dias, leitura atual versus checklist antigo, falha/timeout parcial, concorrência limitada e persistência/merge do indicador. Nenhum livro fictício em produção.
+
+## Condutores da SSMT — 04/11/2026
+- Campo Condutor / RG continua opcional, agora restrito aos militares cadastrados identificados na escala do serviço (colunas de serviço e postos de praia, sem sobreaviso). Ordenação por posto/graduação, seguida pelo menor RG entre iguais; não há data de promoção no cadastro.
+- Composição é carregada para livros novos, ao reabrir rascunho próprio, atualizar/reimportar e retificar. Preenchimento manual usa a composição justificada já registrada. Snapshot servicePersonnel é renovado no servidor ao salvar; sem migração.
+- Condutores previamente gravados continuam visíveis nos livros existentes, sem serem oferecidos para novas escolhas quando fora da escala. Campo vazio continua permitido e não altera as regras de assinatura.
+- Testes de filtragem, militares múltiplos por linha, exclusão de sobreaviso, posto/RG, composição manual, API e testes existentes aprovados; build aprovado.
