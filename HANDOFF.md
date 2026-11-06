@@ -130,3 +130,10 @@ O repositório inclui a aplicação completa, tests/integration.mjs, tests/nauti
 - Os cinco livros exibem a captura por função/posto e guardam o snapshot nos dados do livro; livros assinados/conferidos não buscam uma escala nova automaticamente. Postos de praia também conservam texto sem RG.
 - Ausência de RG não apaga o nome. Seleção de usuários e autorização de assinatura continuam exigindo identificação segura ou substituição justificada existente; nenhuma conta ou RG é inventado.
 - Testes de parser PDF com e sem RG/posto/cadastro, UI de snapshot, suíte dos cinco livros e build. Sem migração, PDFs persistidos ou registros fictícios na produção.
+
+
+## Navegação responsiva — 06/11/2026
+- Cabeçalho móvel fixo durante rolagem, com Início e Menu. Menu expansível com ícones e nomes de todos os destinos permitidos, sem comprimir os botões numa linha. Brasão/nome da unidade e breadcrumb voltam à página inicial.
+- Troca de livros preserva o aviso de alterações não salvas; cancelar mantém o livro e o menu. Destinos filtrados por perfil e validados novamente na função de navegação. Permissões do servidor e assinaturas inalteradas.
+- Base main 658a71a preservada. Testes dos quatro perfis, troca de livros, links Início/brasão, cancelamento/confirmação e suíte existente; build aprovado. Não há migração.
+- Validação visual automatizada em navegador local indisponível: download do Chromium retornou arquivo inválido. Testes de interação React executados normalmente.
