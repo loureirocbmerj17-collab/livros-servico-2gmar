@@ -70,3 +70,5 @@ assert.deepEqual(manualPerson,{rg:'54321',name:'CB TESTE MANUAL'});assert.equal(
 await act(()=>root.unmount());console.log('PASS controls: explicit Yes/No selection, selected state, manual military and normalized RG.');
 
 await import("./draft-signing-ui.mjs");
+
+await import("./navigation-ui.mjs");
