@@ -27,6 +27,11 @@ Meteorologia, condições operacionais, identificação/autoria e revisão final
 - Integração Resend REST, chave de idempotência por RG/livro/serviço, registro privado livros.mail_log.
 - Supervisor: cron 0 21 * * * UTC = 18h Brasília.
 - Outros: cron 0 9 * * * UTC = 06h Brasília, serviço da data anterior.
+- Lembretes 2 e 3 (07/11/2026): 12 h e 24 h depois do 1º e-mail, nos mesmos crons, somente enquanto o livro não estiver Assinado/Conferido.
+  - Oficial de Dia, Adjunto, Náutica e SSMT do serviço D: 1º às 06h de D+1, 2º às 18h de D+1, 3º (último) às 06h de D+2.
+  - Supervisor do serviço D: 1º às 18h de D, 2º às 06h de D+1, 3º (último) às 18h de D+1.
+  - Sem livro: e-mail ao responsável da escala ("ainda não preenchido"). Rascunho: e-mail ao autor do rascunho ("salvo sem assinatura", com versão e link para assinar sem retificar).
+  - mail_log kind reminder2/reminder3, chave própria por etapa; lembretes 2 e 3 não são repetidos em execuções posteriores. O 1º e-mail mantém o texto e as regras anteriores.
 - Endpoint /api/reminders protegido por CRON_SECRET; nenhuma sessão de usuário necessária.
 - Cada execução consulta escala atualizada e substituições em assignment_events. Permutas textuais não alteram responsabilidade: usar Solucionar responsabilidade.
 - Náutica: posto/graduação e, no empate, RG crescente entre operadores escalados. Enc. motoristas: função explícita da escala, depois índices usados pelo módulo SSMT (encarregado/SOS acumulado).

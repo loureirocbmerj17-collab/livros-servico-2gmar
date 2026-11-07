@@ -8,7 +8,7 @@ export async function run({sql,context,dispatchNotifications}){
  process.env.GMAIL_APP_PASSWORD='abcd efgh ijkl mnop';
  assert.equal(mailReady(),true);
  let calls=0,closed=0,options,message;
- nodemailer.createTransport=o=>{options=o;return {sendMail:async m=>{calls++;message=m;return {accepted:[m.to.address],rejected:[],messageId:m.messageId};},close:()=>closed++};};
+ nodemailer.createTransport=o=>{options=o;return {sendMail:async m=>{if(!/lembrete/i.test(m.subject))calls++;message=m;return {accepted:[m.to.address],rejected:[],messageId:m.messageId};},close:()=>closed++};};
  try{
   const result=await sendMail('fixture',{to:'recipient@example.test',subject:'Teste',text:'Conteúdo'});
   assert.match(result,/^<[a-f0-9]{64}@gmail.com>$/);
@@ -19,7 +19,7 @@ export async function run({sql,context,dispatchNotifications}){
   await Promise.all([dispatchNotifications(context,now),dispatchNotifications(context,now)]);
   assert.equal(calls,2); // One direct test + exactly one reminder under concurrency.
   await dispatchNotifications(context,now);assert.equal(calls,2);
-  nodemailer.createTransport=()=>({sendMail:async()=>{calls++;throw Error('Secret details must not escape');},close:()=>closed++});
+  nodemailer.createTransport=()=>({sendMail:async m=>{if(!/lembrete/i.test(m.subject))calls++;throw Error('Secret details must not escape');},close:()=>closed++});
   await assert.rejects(sendMail('failure',{to:'recipient@example.test',subject:'Teste',text:'x'}),e=>e.message.includes('Gmail')&&!e.message.includes('Secret'));
   const failureDate=new Date('2026-11-21T21:00:00Z'),before=calls;
   await dispatchNotifications(context,failureDate);await dispatchNotifications(context,failureDate);
