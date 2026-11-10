@@ -50,7 +50,7 @@ export async function adjuntoPost(op:string,u:any,b:any,c:Context){
  const r=await roster(c,b.date);
  if(!review){if((!old||sign)&&r.responsible!==u.rg&&!events.length)fail('Seu RG deve constar como Adjunto na escala. Use Solucionar responsabilidade.',403);
  d=JSON.parse(JSON.stringify(d));delete d.signatureDrawing;delete d.assignmentAudit;delete d.personnel;delete d.scaleSource;
- d.officerRg=r.officerRg;d.scaleSource=r.source;d.scaleCapture=(r as any).capture||JSON.parse(old?.data||'{}').scaleCapture;d.rosterSnapshot=r.found?{assignments:r.assignments,adjunto:r.responsible}:old?JSON.parse(old.data).rosterSnapshot:null;
+ d.officerRg=r.officerRg;d.scaleSource=r.source;delete d.scaleCapture;d.rosterSnapshot=r.found?{assignments:r.assignments,adjunto:r.responsible}:old?JSON.parse(old.data).rosterSnapshot:null;
  const manual=manualPersonnel(d);d.manualPersonnel=manual;
  const people=await rows(db,'SELECT rg,name,rank FROM users WHERE active=1');
  const referenced=new Set([d.responsible,d.officerRg,...d.posts.flatMap((p:any)=>p.rgs),...d.late.map((p:any)=>p.rg),...d.absent.map((p:any)=>p.rg),...d.swaps.flatMap((p:any)=>[p.outgoing,p.incoming])].filter(Boolean));
