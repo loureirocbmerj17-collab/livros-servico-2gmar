@@ -2,12 +2,6 @@ export const serviceBooks=[{id:'supervisor',name:'Supervisor'},{id:'adjunto',nam
 export function normalizeRg(value:unknown){return String(value??'').replace(/\D/g,'').replace(/^0+/,'');}
 // Display/archive the source text independently of any user-account lookup.
 export function captureScale(scale:any){return {date:scale.serviceDate||'',source:scale.source||null,assignments:[...(scale.serviceAssignments||[]).map((a:any)=>({label:a.label,text:a.rawValue??a.value})),...(scale.beachCaptures||[]).map((a:any)=>({label:a.post,text:a.text}))].filter(a=>a.text)};}
-export function validScaleCapture(c:any,date:string){
- if(typeof c==='string')return c.length<=60000;
- if(!c||typeof c!=='object'||Array.isArray(c)||typeof c.date!=='string'||(c.date&&c.date!==date)||!Array.isArray(c.assignments)||c.assignments.length>300)return false;
- if(!c.assignments.every((a:any)=>a&&typeof a==='object'&&typeof a.label==='string'&&typeof a.text==='string'&&a.label.length<=300&&a.text.length<=3000))return false;
- return JSON.stringify(c).length<=60000;
-}
 export function assignmentRg(value:string){const numbers=String(value||'').match(/\b\d{4,8}\b/g)||[];return numbers.length===1?normalizeRg(numbers[0]):'';}
 export function nauticalAssignments(rows:string[]){return rows.flatMap(row=>row.split(/\s*\/\s*/)).map(v=>v.trim()).filter(v=>assignmentRg(v));}
 export function canSignAssigned(type:string,crew:string[],rg:string,adjuntosDaEscala:string[]=[]){if(type==='adjunto')return adjuntosDaEscala.some(value=>assignmentRg(value)===normalizeRg(rg));if(type==='nautica')return nauticalAssignments(crew.slice(8,11)).some(value=>assignmentRg(value)===normalizeRg(rg));const indexes=type==='officer'?[0]:type==='supervisor'?[5]:type==='nautica'?[8,9,10]:type==='ssmt'?[12,13]:[];return indexes.some(i=>assignmentRg(crew[i])===normalizeRg(rg));}
