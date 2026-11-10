@@ -6,7 +6,7 @@ import {supervisorGet,supervisorPost} from '../../supervisor-server';
 import {ssmtGet,ssmtPost} from '../../ssmt-server';
 import {nauticalGet,nauticalPost} from '../../nautica-server';
 import {personLabel} from '../../person-label';
-import {normalizeRg,assignmentRg,canSignAssigned,dependencies} from '../../service-policy';
+import {normalizeRg,assignmentRg,canSignAssigned,dependencies,validScaleCapture} from '../../service-policy';
 import { makeMonthlyPdf } from '../../monthly-pdf';
 import { loadSisgeo } from '../../sisgeo';
 import { database } from '../../../lib/database';
@@ -129,7 +129,9 @@ export async function POST(req:Request){try{
  for(const key of ['crew','support','prevention','rescues','physical','forms'])if(!Array.isArray(data[key])||data[key].some((v:any)=>typeof v!=='string'))fail('Campos inválidos.');
  if(data.crew.length===12&&op!=='review')data.crew=[...data.crew,'',''];
  if(![12,roles.length].includes(data.crew.length)||data.support.length!==8||['prevention','rescues','physical','forms'].some(k=>data[k].length!==4))fail('Quantidades de campos inválidas.');
- for(const [k,v] of Object.entries(data))if(!Array.isArray(v)&&typeof v!=='string')fail('Conteúdo inválido.');
+ // Cópia do texto da escala (objeto {date,source,assignments}) anexada pela tela desde 05/11; demais campos são texto ou lista.
+ if(data.scaleCapture!==undefined&&!validScaleCapture(data.scaleCapture,b.date))fail('Cópia da escala inválida. Reimporte a escala e tente novamente.');
+ for(const [k,v] of Object.entries(data))if(k!=='scaleCapture'&&!Array.isArray(v)&&typeof v!=='string')fail('Conteúdo inválido no campo '+k+'.');
  const events=(await db().prepare('SELECT * FROM livros.assignment_events WHERE date=? AND book_type=? AND actor=? ORDER BY id').bind(b.date,'officer',u.rg).all()).results;
  if(op!=='review'){delete data.assignmentAudit;delete data.dependencySummary;if(events.length)data.assignmentAudit=events.map((e:any)=>`${e.created_at} | RG ${e.actor} | Anterior: ${e.previous_assignment} | Responsável: ${e.replacement} | Motivo: ${e.reason}`).join('\n');}
  if(op==='sign'){
