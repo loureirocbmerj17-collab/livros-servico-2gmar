@@ -64,7 +64,7 @@ globalThis.scaleCrew=['CAP RG 99998 TESTE'];
 compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEFAULT_FOLDER, folderId, loadScale } from '../../scale';","import { DEFAULT_FOLDER, folderId } from '../../scale'; const loadScale=async()=>{if(!globalThis.scaleCrew)throw Error('Indisponível');return {crew:globalThis.scaleCrew,adjunto:globalThis.scaleAdjunto||''}};").replace("import { database } from '../../../lib/database';","const database=globalThis.testDb;").replace("from '../../../lib/storage'","from './storage'").replace(/from '\.\.\/\.\.\/([^']+)'/g,"from './$1'"),'route');
 const {POST,GET}=await import(pathToFileURL(path.join(qa,'route.mjs')));const {blank}=await import(pathToFileURL(path.join(qa,'book-model.mjs')));
 let cookie='';const password='Test-password-42!',setupToken='TEST-ONLY-INITIAL-SETUP-CODE-32-CHARS';process.env.SETUP_TOKEN=setupToken;
-async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];if(status===200&&op==='user')await sql.query("UPDATE livros.users SET email=rg||'@example.test' WHERE rg=$1",[String(data.rg)]);return v}
+async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];if(status===200&&op==='user'&&data.email===undefined)await sql.query("UPDATE livros.users SET email=rg||'@example.test' WHERE rg=$1",[String(data.rg)]);return v}
 const get=(params,session=cookie)=>GET(new Request('https://test.local/api/service?'+params,{headers:{cookie:session}}));
 assert.equal((await get('op=monthPdf&month=2026-10','')).status,401);
 await post('setup',{rg:'99999',name:'TESTE ADMIN',password},403);
@@ -73,6 +73,15 @@ assert.equal((await get('op=list')).status,428);
 await post('profile',{rg:'99999',current:password,password,email:'admin@example.test'});
 await post('setup',{rg:'88888',name:'OUTRO ADMIN',password,setupToken},409);
 await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,password});await post('user',{rg:'99997',name:'TESTE SUBCMT',role:'reviewer',active:true,password});
+// Admin edits email without resetting an existing account's first access state.
+await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,email:'INVALID'},400);
+await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,email:'  Official@Example.test '});
+let listedUsers=await (await get('op=users')).json();
+assert.equal(listedUsers.find(p=>p.rg==='99998').email,'official@example.test');
+assert.ok(!('password' in listedUsers[0]));
+await sql.query("INSERT INTO livros.password_resets(token_hash,rg,password_hash,email,expires_at) SELECT 'admin-email-test',rg,password,email,now()+interval '30 minutes' FROM livros.users WHERE rg='99998'");
+await post('user',{rg:'99998',name:'TESTE OFICIAL',role:'officer',active:true,email:'corrected@example.test'});
+assert.equal((await sql.query("SELECT count(*) n FROM livros.password_resets WHERE token_hash='admin-email-test'")).rows[0].n,0);
 await post('user',{rg:'99996',name:'TESTE PRACA',role:'enlisted',active:true,password});await post('login',{rg:'0099996',password});for(const op of ['list','book','pdf','monthPdf','history','users','dependencies'])assert.equal((await get('op='+op+'&date=2026-10-23')).status,403);await post('save',{},403);await post('resolveAssignment',{},403);
 await post('login',{rg:'99998',password:'wrong'},401);await post('login',{rg:'99998',password});
 const drawing=JSON.stringify({width:600,height:180,strokes:[[[10,80],[50,40],[80,90],[100,30],[130,70],[200,60],[300,80],[500,50]]]});

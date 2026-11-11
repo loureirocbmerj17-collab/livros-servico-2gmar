@@ -51,7 +51,7 @@ export async function GET(req:Request){try{
  if(u.role==='enlisted')fail('Este acesso é restrito aos oficiais.',403);
  if(op==='dependencies'){const book=await db().prepare('SELECT author FROM books WHERE date=?').bind(url.searchParams.get('date')).first<any>();const rows=(await db().prepare('SELECT * FROM livros.service_attestations WHERE date=?').bind(url.searchParams.get('date')).all()).results;return json(dependencies(rows,book?.author||''));}
  if(op==='scaleConfig'){const row=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();return json({folder:row?.value||DEFAULT_FOLDER});}
- if(op==='users'){if(u.role!=='admin')fail('Acesso restrito à administração.',403);return json((await db().prepare('SELECT rg,name,rank,role,active FROM users ORDER BY name').all()).results);}
+ if(op==='users'){if(u.role!=='admin')fail('Acesso restrito à administração.',403);return json((await db().prepare('SELECT rg,name,rank,role,active,email FROM users ORDER BY name').all()).results);}
  if(op==='reviewQueue'){
   if(!['reviewer','admin'].includes(u.role))fail('Acesso restrito ao subcomandante e à administração.',403);
   const month=url.searchParams.get('month')||'';
@@ -115,7 +115,10 @@ export async function POST(req:Request){try{
  if(op==='user'){
  if(u.role!=='admin')fail('Somente a administração pode cadastrar usuários.',403);const rg=normalizeRg(b.rg);if(!/^\d{3,12}$/.test(rg)||!String(b.name).trim()||!['officer','reviewer','admin','enlisted'].includes(b.role))fail('Dados do usuário inválidos.');if(rg===u.rg&&(b.role!=='admin'||!b.active))fail('Você não pode remover seu próprio acesso administrativo.');
  const old=await db().prepare('SELECT * FROM users WHERE rg=?').bind(rg).first<any>();const chosen=String(b.password||(!old?rg:''));if(chosen&&chosen!==rg&&chosen.length<8)fail('Use pelo menos 8 caracteres ou o RG para acesso inicial.');const pw=chosen?await password(chosen):old.password;
- await db().batch([db().prepare('INSERT INTO users(rg,name,role,password,active,rank,first_login) VALUES(?,?,?,?,?,?,?) ON CONFLICT(rg) DO UPDATE SET name=excluded.name,role=excluded.role,password=excluded.password,active=excluded.active,rank=excluded.rank,first_login=excluded.first_login').bind(rg,String(b.name).slice(0,150),b.role,pw,b.active?1:0,String(b.rank??old?.rank??'').slice(0,60),chosen===rg?true:old?.first_login||false),db().prepare('DELETE FROM sessions WHERE rg=?').bind(rg),db().prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,`Usuário ${rg}: perfil ${b.role}; ativo ${!!b.active}; senha alterada ${!!b.password}`,new Date().toISOString())]);return json({ok:true});}
+ const email=String(b.email===undefined?old?.email||'':b.email).trim().toLowerCase();
+ if(email&&(email.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(email)))fail('Informe um e-mail válido.');
+ const emailChanged=email!==(old?.email||'');
+ await db().batch([db().prepare('INSERT INTO users(rg,name,role,password,active,rank,first_login,email) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(rg) DO UPDATE SET name=excluded.name,role=excluded.role,password=excluded.password,active=excluded.active,rank=excluded.rank,first_login=excluded.first_login,email=excluded.email').bind(rg,String(b.name).slice(0,150),b.role,pw,b.active?1:0,String(b.rank??old?.rank??'').slice(0,60),chosen===rg?true:old?.first_login||false,email),...(emailChanged?[db().prepare('DELETE FROM livros.password_resets WHERE rg=?').bind(rg)]:[]),db().prepare('DELETE FROM sessions WHERE rg=?').bind(rg),db().prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,`Usuário ${rg}: perfil ${b.role}; ativo ${!!b.active}; senha alterada ${!!b.password}; e-mail alterado ${emailChanged}`,new Date().toISOString())]);return json({ok:true});}
  if(!['save','sign','review'].includes(op))fail('Operação desconhecida.');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||isNaN(Date.parse(b.date))||new Date(b.date).toISOString().slice(0,10)!==b.date)fail('Data inválida.');
  const old=await db().prepare('SELECT * FROM books WHERE date=?').bind(b.date).first<any>();
