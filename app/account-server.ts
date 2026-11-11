@@ -28,7 +28,7 @@ export async function accountAction(op:string,b:any,u:any,c:any):Promise<{ok:boo
    await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,status) VALUES(?,'recovery',?,?,'pending')").bind(id,rg,email).run();
    try{
     const provider=await sendMail(id,{to:email,subject:'2º GMAR — Recuperação de senha',text:'Use o link abaixo para criar uma nova senha. Validade: 30 minutos. Se não solicitou, desconsidere.\n\n'+appOrigin()+'/#reset='+token});
-    await db.prepare("UPDATE livros.mail_log SET status='accepted',attempts=1,provider_id=?,updated_at=now() WHERE id=?").bind(provider,id).run();
+    await db.prepare("UPDATE livros.mail_log SET status='accepted',attempts=1,provider_id=?,detail='Aceito pelo provedor; verifique caixa de entrada e spam do destinatário.',updated_at=now() WHERE id=?").bind(provider,id).run();
    }catch{
     await db.batch([db.prepare('DELETE FROM livros.password_resets WHERE token_hash=?').bind(id),db.prepare("UPDATE livros.mail_log SET status='failed',attempts=1,detail='Envio não confirmado; solicitar novo link.',updated_at=now() WHERE id=?").bind(id)]);
    }
