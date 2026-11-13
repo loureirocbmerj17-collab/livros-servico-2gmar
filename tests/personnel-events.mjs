@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {applyPersonnelEvents,validateEvent} from '../.qa/personnel-events.mjs';
+const person={rg:'12345',name:'TESTE',rank:'CB'};
+const sample={id:'1',kind:'absence',military:person,replacement:{...person,rg:'23456'},situation:'Licenciado',duration:'NFPA',reason:'Trânsito',time:'08:35',notes:''};
+let data={personnel:'Relato antigo.',absences:'Registro anterior.'};
+assert.equal(applyPersonnelEvents(data),data);
+data=applyPersonnelEvents({...data,personnelManual:data.personnel,absencesManual:data.absences,personnelEvents:[sample]});
+assert.match(data.personnel,/Relato antigo\.[\s\S]*NFPA/);
+assert.deepEqual(applyPersonnelEvents(data),data);
+for(const kind of ['delay','missing','swap','release'])assert.equal(validateEvent({...sample,kind}),'');
+assert.ok(validateEvent({...sample,kind:'swap',replacement:person}));
+assert.ok(validateEvent({...sample,kind:'delay',time:'25:00'}));
+assert.ok(validateEvent({...sample,duration:'0'}));
+const cleared=applyPersonnelEvents({...data,personnelEvents:[]});assert.equal(cleared.personnel,'Relato antigo.');assert.equal(cleared.absences,'Registro anterior.');
+assert.throws(()=>applyPersonnelEvents({...data,personnelEvents:[sample,sample]}));
+console.log('PASS personnel events: five types, NFPA, legacy text, repeated save, deletion and invalid inputs.');

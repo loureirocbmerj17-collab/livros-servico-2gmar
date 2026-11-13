@@ -45,7 +45,7 @@ export async function makePdf(book:any){
  section('06','POSTOS COM MAIORES QUANTITATIVOS');
  table(['INDICADOR','POSTO','QUANTIDADE'],[['Prevenções',value(d.topPrevention),value(d.topPreventionCount)],['Socorros',value(d.topRescue),value(d.topRescueCount)]],[95,CW-180,85]);
  block('07','ALTERAÇÕES DE PESSOAL',d.personnel,65);text('Licenciado • Dispensado • Preso • Detido',M+10,y-9,7,regular,C.muted);y+=6;
- block('08','FALTAS, ATRASOS E OBSERVAÇÕES',d.absences,65);
+ block('08','FALTAS, ATRASOS, PERMUTAS E LIBERAÇÕES',d.absences,65);
  newPage('Ordens em vigor, meios e ocorrências');
  block('09','ORDENS EM VIGOR',d.orders,40);
  block('10','ALTERAÇÕES COM VIATURAS',d.vehicles,40);
