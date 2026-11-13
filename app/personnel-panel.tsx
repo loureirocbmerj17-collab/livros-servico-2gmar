@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Plus,Clock,UserMinus,ArrowLeftRight,DoorOpen,ClipboardList} from 'lucide-react';
 import {applyPersonnelEvents,eventLabels,eventText,validateEvent,Military,PersonnelEvent} from './personnel-events';
 import {personLabel} from './person-label';
+const noChanges={personnel:'Não houve licenciados, dispensados, presos ou detidos.',absences:'Não houve atrasos, faltas, permutas ou liberações antecipadas.'};
 const emptyPerson=():Military=>({rg:'',name:'',rank:''});
 function MilitaryField({label,value,roster,people,onChange}:{label:string;value:Military;roster:any[];people:any[];onChange:(p:Military)=>void}){
  const [mode,setMode]=useState('scale'),[query,setQuery]=useState('');
@@ -27,13 +28,14 @@ export default function PersonnelPanel({data,roster,editable,onChange}:{data:any
  const base=()=>({...data,personnelManual:data.personnelManual??data.personnel??'',absencesManual:data.absencesManual??data.absences??'',personnelEvents:rows});
  function commit(next:any){try{onChange(applyPersonnelEvents(next));return true;}catch(e:any){setError(e.message);return false;}}
  function open(kind:string,existing?:PersonnelEvent){trigger.current=document.activeElement as HTMLElement;setError('');setEvent(existing?structuredClone(existing):{id:crypto.randomUUID(),kind,military:emptyPerson(),replacement:emptyPerson(),situation:'',duration:'',reason:'',time:'',notes:''});}
+ function markNoChanges(){const next=base();for(const key of ['personnel','absences'] as const){if(!String(data[key]||'').trim()&&!rows.some(r=>key==='personnel'?r.kind==='absence':r.kind!=='absence'))next[key+'Manual']=noChanges[key];}commit(next);}
  const icons=[ClipboardList,Clock,UserMinus,ArrowLeftRight,DoorOpen];
- return <><h3>Alterações de pessoal</h3>{editable&&<><p>Selecione uma opção para registrar uma alteração.</p><div className="personnel-actions">{Object.entries(eventLabels).map(([kind,label],i)=>{const Icon=icons[i];return <button key={kind} type="button" onClick={()=>open(kind)}><Icon size={20}/>{label}</button>;})}</div></>}
+ return <><h3>Alterações de pessoal</h3>{editable&&<><p>Selecione uma opção para registrar uma alteração.</p><div className="personnel-actions">{Object.entries(eventLabels).map(([kind,label],i)=>{const Icon=icons[i];return <button key={kind} type="button" onClick={()=>open(kind)}><Icon size={20}/>{label}</button>;})}</div><button type="button" onClick={markNoChanges}>Não houve alterações de pessoal</button><p className="muted">Preenche apenas os campos vazios, preservando os lançamentos existentes.</p></>}
  {rows.map(row=><article className="personnel-entry" key={row.id}><p>{eventText(row)}</p>{editable&&<div className="row"><button onClick={()=>open(row.kind,row)}>Editar lançamento</button><button onClick={()=>{if(confirm('Excluir este lançamento?'))commit({...base(),personnelEvents:rows.filter(r=>r.id!==row.id)});}}>Excluir lançamento</button></div>}</article>)}
  {(['personnel','absences'] as const).map(key=><section key={key}><h3>{key==='personnel'?'7. Licenciados, dispensados, presos ou detidos':'8. Atrasos, faltas, permutas e liberações'}</h3><p style={{whiteSpace:'pre-wrap'}}>{data[key]||'Sem lançamentos.'}</p>{editable&&<button onClick={()=>setManual({...manual,[key]:!manual[key]})}>{manual[key]?'Fechar relato manual':'Digitar relato manualmente'}</button>}{manual[key]&&editable&&<label>Relato livre<textarea rows={4} value={data[key+'Manual']??data[key]??''} onChange={e=>commit({...base(),[key+'Manual']:e.target.value})}/></label>}</section>)}
  {error&&!event&&<p role="alert">{error}</p>}
  <dialog ref={dialog} className="personnel-dialog" onCancel={()=>setEvent(null)} aria-labelledby="personnel-dialog-title">
- {event&&<form onSubmit={e=>{e.preventDefault();const problem=validateEvent(event);if(problem){setError(problem);return;}const next=rows.some(r=>r.id===event.id)?rows.map(r=>r.id===event.id?event:r):[...rows,event];if(commit({...base(),personnelEvents:next}))setEvent(null);}}>
+ {event&&<form onSubmit={e=>{e.preventDefault();const problem=validateEvent(event);if(problem){setError(problem);return;}const next=rows.some(r=>r.id===event.id)?rows.map(r=>r.id===event.id?event:r):[...rows,event];const updated=base();const key=event.kind==='absence'?'personnel':'absences';if(updated[key+'Manual']===noChanges[key])updated[key+'Manual']='';if(commit({...updated,personnelEvents:next}))setEvent(null);}}>
  <h2 id="personnel-dialog-title">{eventLabels[event.kind]}</h2>{loadError&&<p role="status">{loadError}</p>}
  <MilitaryField label={event.kind==='swap'?'Militar que sai do serviço':'Militar'} value={event.military} roster={roster} people={people} onChange={military=>setEvent({...event,military})}/>
  {event.kind==='swap'&&<MilitaryField label="Militar que entra no serviço" value={event.replacement} roster={roster} people={people} onChange={replacement=>setEvent({...event,replacement})}/>}
