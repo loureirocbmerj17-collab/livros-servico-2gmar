@@ -40,3 +40,7 @@ button.primary:hover{background:#821a22;border-color:#821a22}button:hover,a.butt
 @media(max-width:360px){.app-navigation{padding:8px}.app-navigation .brand-icon img{width:36px;height:36px}.app-navigation .brand strong{font-size:13px}.mobile-navigation-actions button{padding:7px 6px}}
 
 .personnel-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:18px 0}.personnel-actions button{justify-content:flex-start;min-height:54px}.personnel-entry{border:1px solid var(--line);border-radius:8px;padding:16px;margin:12px 0}.personnel-entry p{white-space:pre-wrap}.personnel-dialog{width:min(640px,calc(100% - 24px));max-height:85dvh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:24px;color:var(--ink)}.personnel-dialog::backdrop{background:#0d182b99}.personnel-dialog label{margin:14px 0}.personnel-military{min-width:0;border:1px solid var(--line);padding:14px;margin:16px 0;border-radius:8px}.personnel-results{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto}.personnel-results button{justify-content:flex-start;text-align:left}
+
+.app-footer.site-credit{justify-content:center;align-items:center;gap:14px;text-align:center;font-size:12px;padding:22px 24px;background:#fafbfc}
+.site-credit img{object-fit:contain;flex-shrink:0}.site-credit p{margin:2px 0;font-size:12px;line-height:1.7;color:#667386}.site-credit strong{color:#795e2c}
+@media(max-width:550px){.app-footer.site-credit{flex-direction:column;gap:8px;padding:20px 16px}}
