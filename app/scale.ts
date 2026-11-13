@@ -21,6 +21,16 @@ export function monthFolder(subfolders:{id:string,name:string}[],date:string){co
  return matches[0];}
 const folderYear=(html:string)=>Number(normalize(decode(html.match(/<title>([^<]*)<\/title>/i)?.[1]||'')).match(/(?:^|\D)(20\d{2})(?:\D|$)/)?.[1]||0);
 export function matchesDay(name:string,date:string){const [year,month,day]=date.split('-').map(Number);const n=normalize(name);const named=new RegExp('(^|\\D)0?'+day+'\\s+(?:DE\\s+)?'+months[month-1]+'(?:\\s+(?:DE\\s+)?(20\\d{2}))?(?=\\D|$)').exec(n);if(named)return !named[2]||Number(named[2])===year;return new RegExp('(^|\\D)0?'+day+'[._ -]0?'+month+'[._ -]'+year+'(\\D|$)').test(n);}
+
+// File titles are hints only; service headers remain authoritative.
+export function candidateDay(name:string,date:string){return matchesDay(name,date)||new RegExp('^(?:ESCALA\\s+(?:DO\\s+DIA\\s+)?)?0?'+Number(date.slice(8))+'(?=\\D|$)').test(normalize(name));}
+function monthNumber(raw:string){const token=normalize(raw).replace(/[^A-Z]/g,'');const exact=months.findIndex(m=>m===token||m.slice(0,3)===token);if(exact>=0)return exact+1;
+ const near=months.map((m,i)=>({m,i})).filter(({m})=>{if(token.length<5)return false;const a=token,b=m;const d=Array.from({length:a.length+1},(_,i)=>Array.from({length:b.length+1},(_,j)=>i===0?j:j===0?i:0));for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length]<=1;});return near.length===1?near[0].i+1:0;
+}
+export function serviceHeaderDate(text:string){const n=normalize(text),dates:string[]=[];
+ for(const hit of n.matchAll(/SERVICO PARA O DIA\s*:?\s*(\d{1,2})(?:\s+DE\s+([A-Z ]+?)\s+(?:DE\s+)?(20\d{2})|[/.\-](\d{1,2})[/.\-](20\d{2}))/g)){const day=Number(hit[1]),month=hit[2]?monthNumber(hit[2]):Number(hit[4]),year=Number(hit[3]||hit[5]);const value=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');if(!month||month>12||day<1||day>new Date(Date.UTC(year,month,0)).getUTCDate())return '';dates.push(value);}
+ return dates.length&&new Set(dates).size===1?dates[0]:'';
+}
 type Row={y:number,items:{str:string,x:number,w:number}[]};
 const rules:[number,RegExp][]=[
  [0,/^OF\.? CHEFE DE OPERACOES$/],[1,/^OF\.? (?:DE )?RAS (?:DO |[-–] ?)?2[º°O]? ?GMAR$/],[2,/^OF\.? (?:DE )?RAS (?:AOS DESTACAMENTOS|[-–] ?DBM)$/],
@@ -52,8 +62,7 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string,people:Sca
  const rows:Row[]=[];for(const item of items.sort((a,b)=>b.transform[5]-a.transform[5])){let row=rows.find(r=>Math.abs(r.y-item.transform[5])<2.7);if(!row){row={y:item.transform[5],items:[]};rows.push(row);}row.items.push({str:item.str,x:item.transform[4],w:item.width});}
  for(const r of rows)r.items.sort((a,b)=>a.x-b.x);
  const text=normalize(rows.map(r=>r.items.map(i=>i.str).join(' ')).join('\n'));
- const m=text.match(/SERVICO PARA O DIA\s+(\d{1,2})\s+DE\s+([A-Z]+)\s+(?:DE\s+)?(20\d{2})/);
- const serviceDate=m?`${m[3]}-${String(months.indexOf(m[2])+1).padStart(2,'0')}-${m[1].padStart(2,'0')}`:'';
+ const serviceDate=serviceHeaderDate(text);
  if(serviceDate!==expectedDate)throw Error('A data no conteúdo da escala não corresponde ao serviço selecionado. Nenhum dado foi importado.');
  let adjunto='',adjuntoCount=0;const serviceAssignments:{label:string,value:string,rawValue:string}[]=[];
  const dayCrew:string[]=[];const nauticalOperators:string[]=[];let nauticalRow=false;
@@ -101,9 +110,9 @@ export async function loadScale(folder:string,date:string,people:ScalePerson[]=[
  const month=monthFolder(folderSubfolders(html),date);
  if(month){const year=folderYear(html);if(year&&year!==Number(date.slice(0,4)))throw Error('A pasta de escalas configurada é de '+year+'. Atualize a pasta do ano para buscar escalas de '+date.slice(0,4)+'.');
   folder=month.id;html=new TextDecoder().decode(await publicRead(`https://drive.google.com/drive/folders/${month.id}`,4*1024*1024,signal));}
- const files=folderFiles(html),candidates=files.filter(f=>matchesDay(f.name,date));
+ const files=folderFiles(html),candidates=files.filter(f=>candidateDay(f.name,date));
  if(!files.length)throw Error('A listagem pública da pasta não está disponível ou não contém Google Docs ou PDFs. O preenchimento manual continua disponível.');
  if(!candidates.length)throw Error('Escala não localizada para este dia na listagem pública da pasta. Preencha manualmente.');
  const file=newestScale(candidates);const bytes=await publicRead(file.type==='doc'?`https://docs.google.com/document/d/${file.id}/export?format=pdf`:`https://drive.google.com/uc?export=download&id=${file.id}`,5*1024*1024,signal);
- const result=await parseScale(bytes,date,people);if(candidates.length>1)result.warnings.push('Foram encontradas '+candidates.length+' escalas para este dia. Importada a mais recentemente modificada: '+file.name+'.');return {...result,source:{id:file.id,name:file.name,type:file.type,modifiedAt:file.modifiedAt?new Date(file.modifiedAt).toISOString():null,url:file.type==='doc'?`https://docs.google.com/document/d/${file.id}/edit`:`https://drive.google.com/file/d/${file.id}/view`,folderUrl:`https://drive.google.com/drive/folders/${folder}`,checkedAt:new Date().toISOString()}};
+ const result=await parseScale(bytes,date,people);if(!matchesDay(file.name,date))result.warnings.push('Data confirmada pelo conteúdo; nome do arquivo com divergência: '+file.name+'.');if(candidates.length>1)result.warnings.push('Foram encontradas '+candidates.length+' escalas para este dia. Importada a mais recentemente modificada: '+file.name+'.');return {...result,source:{id:file.id,name:file.name,type:file.type,modifiedAt:file.modifiedAt?new Date(file.modifiedAt).toISOString():null,url:file.type==='doc'?`https://docs.google.com/document/d/${file.id}/edit`:`https://drive.google.com/file/d/${file.id}/view`,folderUrl:`https://drive.google.com/drive/folders/${folder}`,checkedAt:new Date().toISOString()}};
 }
