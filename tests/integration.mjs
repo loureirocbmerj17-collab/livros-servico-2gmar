@@ -137,3 +137,16 @@ await import('./fleet-cases.mjs').then(m=>m.run({sql,get,post,password}));
 await sql.close();
 
 await import('./personnel-events.mjs');
+
+{
+ const {candidateDay,serviceHeaderDate}=await import('../.qa/scale.mjs');
+ assert.equal(candidateDay('13 DE NOVEMBRRO','2026-11-13'),true);
+ assert.equal(candidateDay('12 DE NOVEMBRO','2026-11-13'),false);
+ for(const title of ['13 DE NOVEMBRRO DE 2026','13 DE NOVEM BRO DE 2026','13 DE NOV DE 2026','13/11/2026'])
+  assert.equal(serviceHeaderDate('SERVICO PARA O DIA '+title),'2026-11-13');
+ assert.equal(serviceHeaderDate('SERVICO PARA O DIA 31/11/2026'),'');
+ assert.equal(serviceHeaderDate('OBSERVACAO 13/11/2026'),'');
+ assert.equal(serviceHeaderDate('SERVICO PARA O DIA 13/11/2026 SERVICO PARA O DIA 12/11/2026'),'');
+ assert.equal(serviceHeaderDate('SERVICO PARA O DIA 12/11/2026'),'2026-11-12');
+ console.log('PASS scale dates: typo, split month, abbreviation, numeric header, invalid dates and conflicts.');
+}
