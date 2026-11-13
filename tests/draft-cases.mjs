@@ -72,3 +72,5 @@ await act(()=>root.unmount());console.log('PASS controls: explicit Yes/No select
 await import("./draft-signing-ui.mjs");
 
 await import("./navigation-ui.mjs");
+
+await import("./personnel-ui.mjs");

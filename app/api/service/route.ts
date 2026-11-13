@@ -1,3 +1,4 @@
+import {applyPersonnelEvents} from '../../personnel-events';
 import {captureScale} from '../../service-policy';
 import {accountAction,needsProfile} from '../../account-server';
 import {mailReady,mailProvider} from '../../mail-service';
@@ -49,6 +50,7 @@ export async function GET(req:Request){try{
  if(op?.startsWith('nautical'))return json(await nauticalGet(op,u,url,nauticalContext()));
  if(op==='monthPdf'&&url.searchParams.get('type')==='nautica')return json(await nauticalGet('nauticalMonthPdf',u,url,nauticalContext()));
  if(u.role==='enlisted')fail('Este acesso é restrito aos oficiais.',403);
+ if(op==='personnelDirectory')return json((await db().prepare('SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name').all()).results);
  if(op==='dependencies'){const book=await db().prepare('SELECT author FROM books WHERE date=?').bind(url.searchParams.get('date')).first<any>();const rows=(await db().prepare('SELECT * FROM livros.service_attestations WHERE date=?').bind(url.searchParams.get('date')).all()).results;return json(dependencies(rows,book?.author||''));}
  if(op==='scaleConfig'){const row=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();return json({folder:row?.value||DEFAULT_FOLDER});}
  if(op==='users'){if(u.role!=='admin')fail('Acesso restrito à administração.',403);return json((await db().prepare('SELECT rg,name,rank,role,active,email FROM users ORDER BY name').all()).results);}
@@ -133,7 +135,7 @@ export async function POST(req:Request){try{
  if(data.crew.length===12&&op!=='review')data.crew=[...data.crew,'',''];
  if(![12,roles.length].includes(data.crew.length)||data.support.length!==8||['prevention','rescues','physical','forms'].some(k=>data[k].length!==4))fail('Quantidades de campos inválidas.');
  // O texto lido da escala só é exibido durante o preenchimento; não compõe o livro e não é gravado.
- if(op!=='review')delete data.scaleCapture;
+ if(op!=='review'){delete data.scaleCapture;try{Object.assign(data,applyPersonnelEvents(data));}catch(e:any){fail(e.message);}}
  for(const [k,v] of Object.entries(data))if(!Array.isArray(v)&&typeof v!=='string')fail('Conteúdo inválido no campo '+k+'.');
  const events=(await db().prepare('SELECT * FROM livros.assignment_events WHERE date=? AND book_type=? AND actor=? ORDER BY id').bind(b.date,'officer',u.rg).all()).results;
  if(op!=='review'){delete data.assignmentAudit;delete data.dependencySummary;if(events.length)data.assignmentAudit=events.map((e:any)=>`${e.created_at} | RG ${e.actor} | Anterior: ${e.previous_assignment} | Responsável: ${e.replacement} | Motivo: ${e.reason}`).join('\n');}
