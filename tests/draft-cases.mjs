@@ -74,3 +74,16 @@ await import("./draft-signing-ui.mjs");
 await import("./navigation-ui.mjs");
 
 await import("./personnel-ui.mjs");
+
+{
+ const {useUnsignedExit,requestBookExit}=await import('../.qa/draft-recovery.mjs');
+ let saved=false,exits=0,signature=0;
+ function ExitTest(){return useUnsignedExit(true,async()=>saved,()=>signature++);}
+ await act(()=>{root=create(React.createElement(ExitTest));});
+ const leave=()=>act(()=>{assert.equal(requestBookExit(()=>exits++),false);});
+ const choose=i=>act(()=>root.root.findAllByType('button')[i].props.onClick());
+ await leave();await choose(0);assert.equal(signature,1);assert.equal(exits,0);
+ await leave();await choose(1);assert.equal(exits,0);
+ saved=true;await leave();await choose(1);assert.equal(exits,1);
+ await act(()=>root.unmount());console.log('PASS unsigned exit: signature, failed save stays, successful save exits.');
+}

@@ -111,3 +111,27 @@ export async function dispatchNotifications(c:{db:any,scale:(date:string)=>Promi
  const followUps=[];for(const w of followUpWindows(now))followUps.push(await processFollowUp(c,now,send,w));
  return {...result,followUps};
 }
+
+export async function personalDrafts(db:any, user:{rg:string,role:string}){
+ const queries=Object.entries(bookTables).filter(([type])=>type!=='officer'||user.role!=='enlisted').map(([type,table])=>({type,sql:"SELECT date FROM "+table+" WHERE author=? AND status='Rascunho'"}));
+ const groups=await Promise.all(queries.map(async ({type,sql})=>(await db.prepare(sql).bind(user.rg).all()).results.map((r:any)=>({type,date:r.date,name:names[type]}))));
+ return groups.flat().sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+export async function sendRequestedDrafts(db:any, batch:{type:string,date:string,author:string}[],batchId:string){
+ const counts:Record<string,number>={};
+ for(const {type,date,author} of batch){
+  const table=bookTables[type];
+  if(!table)continue;
+  const person=await db.prepare("SELECT u.email FROM "+table+" b JOIN users u ON u.rg=b.author WHERE b.date=? AND b.author=? AND b.status='Rascunho' AND u.active=1").bind(date,author).first();
+  let outcome='skipped';
+  if(person?.email){
+   const id='draft-notice:'+batchId+':'+type+':'+date;
+   await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,service_date,book_type,status) VALUES(?,'draft_notice',?,?,?,?,'pending') ON CONFLICT(id) DO NOTHING").bind(id,author,person.email,date,type).run();
+   const label='Livro '+names[type]+' de '+date.split('-').reverse().join('/');
+   outcome=await deliver(db,new Date(),sendMail,id,{to:person.email,subject:'2º GMAR — '+label+' salvo sem assinatura',text:'O '+label+' está salvo como rascunho. Acesse com seu RG e senha, confira o preenchimento e assine na última etapa.\n\n'+appOrigin()+'/?book='+type+'&date='+date})||'previous';
+  }
+  counts[outcome]=(counts[outcome]||0)+1;
+ }
+ return counts;
+}

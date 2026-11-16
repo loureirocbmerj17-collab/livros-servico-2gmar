@@ -15,3 +15,19 @@ export function ReadingWarnings({data}:{data:any}){
  return warnings.length?<div className="alert error" role="alert"><div><b>Confira as leituras abaixo do registro anterior:</b>{warnings.map((r:any)=><p key={r.id}>{r.prefix}: anterior {r.previousHours}; informado {r.hours}. Se houve troca ou correção do medidor, registre o motivo nas observações.</p>)}</div></div>:null;
 }
 export function SigningChecklist({issues}:{issues:string[]}){return <div className={issues.length?'note':'alert success'}><div><b>{issues.length?'Pendências antes da assinatura':'Campos obrigatórios preenchidos'}</b>{issues.length?<ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul>:<p>Confira os dados. Sua identidade e a escala também serão validadas ao assinar.</p>}</div></div>}
+
+type LeaveHandler=(next:()=>void)=>boolean;
+let activeLeave:LeaveHandler|undefined;
+export function requestBookExit(next:()=>void,dirty=false){if(activeLeave?.(next))return false;if(dirty&&!confirm("Há alterações não salvas. Deseja sair?"))return false;next();return true;}
+export function useUnsignedExit(enabled:boolean,save:()=>Promise<boolean>,sign:()=>void){
+ const [next,setNext]=useState<(()=>void)|null>(null),[saving,setSaving]=useState(false);
+ useEffect(()=>{
+  if(!enabled)return;
+  const handle:LeaveHandler=action=>{setNext(()=>action);return true;};
+  const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};
+  activeLeave=handle;
+  if(typeof window!=='undefined')window.addEventListener?.('beforeunload',warn);
+  return ()=>{if(activeLeave===handle)activeLeave=undefined;if(typeof window!=='undefined')window.removeEventListener?.('beforeunload',warn);};
+ },[enabled]);
+ return next&&<div className="overlay"><section className="modal" role="dialog" aria-modal="true" aria-label="Falta a assinatura"><h2>Este livro ainda precisa da sua assinatura</h2><button disabled={saving} onClick={()=>{setNext(null);sign();}}>Ir para a assinatura</button><button disabled={saving} onClick={async()=>{setSaving(true);const ok=await save();setSaving(false);setNext(null);if(ok)next();}}>Sim, sair e salvar rascunho. Irei assinar depois.</button><button disabled={saving} onClick={()=>setNext(null)}>Continuar preenchendo</button></section></div>;
+}
