@@ -45,6 +45,7 @@ export async function run({post,get,sql,password,qa}){
  await dispatchNotifications(context,new Date('2026-11-13T21:00:00Z'),send);assert.equal(sent,1);
  assert.equal((await sql.query("SELECT status FROM livros.mail_log WHERE service_date='2026-11-13' AND book_type='supervisor'")).rows[0].status,'missing_email');
  await sql.query("UPDATE livros.users SET email='military@example.test' WHERE rg='99996'");
+ await sql.query("UPDATE livros.mail_log SET created_at='2026-11-13T21:00:00Z' WHERE service_date='2026-11-13'");
  let attempts=0;await dispatchNotifications(context,new Date('2026-11-14T21:00:00Z'),async(id,m)=>{if(!/lembrete/i.test(m.subject))attempts++;throw Error('timeout');});assert.equal(attempts,2);
  await sql.query("UPDATE livros.mail_log SET first_attempt_at='2026-11-14T21:00:00Z' WHERE service_date='2026-11-14'");
  await dispatchNotifications(context,new Date('2026-11-14T21:01:00Z'),send);assert.equal(sent,2);
