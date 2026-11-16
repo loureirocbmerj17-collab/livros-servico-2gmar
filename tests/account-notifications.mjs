@@ -58,6 +58,13 @@ export async function run({post,get,sql,password,qa}){
  {
   const all=Array(15).fill('RG 99996'),only={crew:all,adjunto:'RG 99996',nauticalOperators:['SUBTEN RG 99996']};
   const box=[],ctx={db:globalThis.testDb,scale:async()=>only},mail=async(id,m)=>{box.push(m);return 'fake-'+box.length;};
+  const morning=new Date('2026-12-01T10:00:00Z');
+  await dispatchNotifications(ctx,morning,mail);
+  await dispatchNotifications(ctx,morning,mail);
+  assert.equal(box.length,5);
+  assert.equal(new Set(box.map(m=>m.subject)).size,5);
+  assert.ok(box.every(m=>m.text.includes('date=2026-12-01')));
+  box.length=0;
   const book=(table,date,status,version=1)=>sql.query(`INSERT INTO ${table}(date,author,author_name,version,status,data,actor,updated,pdf) SELECT $1,rg,name,$3,$2,'{}',rg,now()::text,'' FROM livros.users WHERE rg='99996'`,[date,status,version]);
   const D='2026-12-01',of=d=>box.filter(m=>m.text.includes('date='+d));
   await book('livros.books',D,'Rascunho',2);await book('livros.supervisor_books',D,'Assinado');await book('livros.ssmt_books',D,'Conferido');
@@ -78,7 +85,7 @@ export async function run({post,get,sql,password,qa}){
    await dispatchNotifications(ctx,new Date(moment),mail);const m=of(S).filter(x=>x.text.includes('book=supervisor'));assert.equal(m.length,1,moment);assert.match(m[0].subject,subject);box.length=0;}
   await dispatchNotifications(ctx,new Date('2026-12-07T09:00:00Z'),mail);assert.equal(of(S).filter(x=>x.text.includes('book=supervisor')).length,0,'nenhum lembrete do Supervisor depois do 3º');
   const kinds=(await sql.query("SELECT kind,count(*)::int n FROM livros.mail_log WHERE service_date=$1 AND status='accepted' GROUP BY kind ORDER BY kind",[D])).rows;
-  assert.deepEqual(kinds,[{kind:'reminder',n:4},{kind:'reminder2',n:3},{kind:'reminder3',n:2}]);
+  assert.deepEqual(kinds,[{kind:'duty',n:5},{kind:'reminder',n:4},{kind:'reminder2',n:3},{kind:'reminder3',n:2}]);
   // Livros fictícios de dezembro permanecem: o banco bloqueia exclusão de livros.
  }
  await import('./gmail-mail.mjs').then(m=>m.run({sql,context,dispatchNotifications}));

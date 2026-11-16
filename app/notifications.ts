@@ -5,6 +5,7 @@ const names:Record<string,string>={officer:'Oficial de Dia',supervisor:'Supervis
 export function serviceWindow(now:Date){
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  const today=parts.year+'-'+parts.month+'-'+parts.day,hour=Number(parts.hour);
+ if(hour===7)return {date:today,types:Object.keys(names),morning:true};
  if(hour===18)return {date:today,types:['supervisor']};
  if(hour===6)return {date:new Date(Date.parse(today+'T12:00:00Z')-86400000).toISOString().slice(0,10),types:['officer','adjunto','nautica','ssmt']};
  return null;
@@ -15,7 +16,7 @@ const shift=(date:string,days:number)=>new Date(Date.parse(date+'T12:00:00Z')+da
 //  06h: 2º do Supervisor de ontem; 3º dos demais livros de anteontem.
 //  18h: 2º dos demais livros de ontem; 3º do Supervisor de ontem.
 export function followUpWindows(now:Date){
- const first=serviceWindow(now);if(!first)return [];
+ const first=serviceWindow(now);if(!first||first.morning)return [];
  if(first.types[0]==='supervisor'){const y=shift(first.date,-1);return [{date:y,types:FOUR,stage:2},{date:y,types:['supervisor'],stage:3}];}
  return [{date:first.date,types:['supervisor'],stage:2},{date:shift(first.date,-1),types:FOUR,stage:3}];
 }
@@ -51,21 +52,36 @@ async function deliver(db:any,now:Date,send:typeof sendMail,id:string,fresh:Mess
  }
  return '';
 }
-async function processWindow(c:{db:any,scale:(date:string)=>Promise<any>},now:Date,send:typeof sendMail,window:{date:string,types:string[]}){
+const dutyRoles:Record<string,string>={officer:'Oficial de Dia',ssmt:'Encarregado de Motoristas',nautica:'Operador mais antigo da Náutica',supervisor:'Supervisor de Praia',adjunto:'Adjunto ao Oficial de Dia'};
+export function morningMessage(to:string,name:string,type:string,date:string):Message{
+ const day=date.split('-').reverse().join('/');
+ return {to,subject:'2º GMAR — Serviço de '+day+' · '+dutyRoles[type],
+  text:'Bom dia, '+name+'.\n\nVocê está escalado para '+day+' na função de '+dutyRoles[type]+'. Lembre-se de preencher e assinar o Livro '+names[type]+' referente a este serviço.\n\n'+appOrigin()+'/?book='+type+'&date='+date};
+}
+export async function sendDutyPreview(db:any,id:string,to:string,date:string){
+ const message=morningMessage(to,'CAP BM Loureiro','officer',date);
+ message.subject='[TESTE] '+message.subject;
+ message.text='Esta é uma prévia do aviso das 07h, com uma função de exemplo.\n\n'+message.text;
+ await db.prepare("INSERT INTO livros.mail_log(id,kind,recipient,status) VALUES(?,'preview',?,'pending') ON CONFLICT(id) DO NOTHING").bind(id,to).run();
+ return deliver(db,new Date(),sendMail,id,message);
+}
+async function processWindow(c:{db:any,scale:(date:string)=>Promise<any>},now:Date,send:typeof sendMail,window:{date:string,types:string[],morning?:boolean}){
+ const kind=window.morning?'duty':'reminder';
  const {db}=c,{date,types}=window;const people=(await db.prepare('SELECT rg,name,rank,email FROM users WHERE active=1').all()).results;
  let scale:any;try{scale=await c.scale(date);}catch{
-  await db.prepare("INSERT INTO livros.mail_log(id,kind,service_date,status,detail) VALUES(?,'schedule',?,'pending','Escala indisponível; não houve envio.') ON CONFLICT(id) DO UPDATE SET detail=excluded.detail,updated_at=now()").bind('scale:'+date+':'+types[0],date).run();
+  await db.prepare("INSERT INTO livros.mail_log(id,kind,service_date,status,detail) VALUES(?,?,?,'pending','Escala indisponível; não houve envio.') ON CONFLICT(id) DO UPDATE SET detail=excluded.detail,updated_at=now()").bind(kind+':scale:'+date+':'+types[0],window.morning?'duty_schedule':'schedule',date).run();
   return {pending:'Escala indisponível.'};
  }
  const events=(await db.prepare('SELECT * FROM livros.assignment_events WHERE date=? ORDER BY id').bind(date).all()).results;
- const recipients=scheduledRecipients(scale,people,events),outcomes:any[]=[];
+ const roster=window.morning?{...scale,crew:(scale.crew||[]).map((v:string,i:number)=>i===13?'':v)}:scale;
+ const recipients=scheduledRecipients(roster,people,events),outcomes:any[]=[];
  for(const type of types){
-  const rg=recipients[type],person=people.find((p:any)=>p.rg===rg),id='reminder:'+date+':'+type+':'+(rg||'unassigned');
+  const rg=recipients[type],person=people.find((p:any)=>p.rg===rg),id=kind+':'+date+':'+type+':'+(rg||'unassigned');
   const status=!rg?'unassigned':!person?.email?'missing_email':!mailReady()?'not_configured':'pending';
-  await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,service_date,book_type,status,detail) VALUES(?,'reminder',?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(id,rg||'',person?.email||'',date,type,status,status==='pending'?'':status==='missing_email'?'E-mail ausente ou militar não cadastrado.':status==='unassigned'?'Responsável não identificado.':status==='not_configured'?'Configurar o provedor de e-mail e remetente.':'').run();
+  await db.prepare("INSERT INTO livros.mail_log(id,kind,rg,recipient,service_date,book_type,status,detail) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING").bind(id,kind,rg||'',person?.email||'',date,type,status,status==='pending'?'':status==='missing_email'?'E-mail ausente ou militar não cadastrado.':status==='unassigned'?'Responsável não identificado.':status==='not_configured'?'Configurar o provedor de e-mail e remetente.':'').run();
   if(status!=='pending'){outcomes.push({type,status});continue;}
   const dateBR=date.split('-').reverse().join('/'),end=shift(date,1).split('-').reverse().join('/');
-  const result=await deliver(db,now,send,id,{to:person.email,subject:'2º GMAR — Preenchimento do Livro '+names[type]+' — '+dateBR,text:'Prezado militar '+personLabel(person)+',\n\nConforme a escala do 2º GMAR, consta sua designação para o Livro '+names[type]+', serviço de '+dateBR+' para '+end+'.\n\nAcesse com RG e senha para preencher e assinar:\n'+appOrigin()+'/?book='+type+'&date='+date+'\n\nCaso tenha ocorrido alteração, troca ou permuta e você não seja o responsável nesta data, desconsidere esta mensagem.\n\nMensagem automática — Sistema de Livros de Serviço do 2º GMAR.'});
+  const result=await deliver(db,now,send,id,window.morning?morningMessage(person.email,personLabel(person),type,date):{to:person.email,subject:'2º GMAR — Preenchimento do Livro '+names[type]+' — '+dateBR,text:'Prezado militar '+personLabel(person)+',\n\nConforme a escala do 2º GMAR, consta sua designação para o Livro '+names[type]+', serviço de '+dateBR+' para '+end+'.\n\nAcesse com RG e senha para preencher e assinar:\n'+appOrigin()+'/?book='+type+'&date='+date+'\n\nCaso tenha ocorrido alteração, troca ou permuta e você não seja o responsável nesta data, desconsidere esta mensagem.\n\nMensagem automática — Sistema de Livros de Serviço do 2º GMAR.'});
   if(result)outcomes.push({type,status:result});
  }
  return {date,outcomes};
@@ -101,6 +117,7 @@ async function processFollowUp(c:{db:any,scale:(date:string)=>Promise<any>},now:
 export async function dispatchNotifications(c:{db:any,scale:(date:string)=>Promise<any>},now=new Date(),send=sendMail){
  const window=serviceWindow(now);if(!window)return {skipped:'Fora do horário programado.'};
  const result=await processWindow(c,now,send,window);
+ if(window.morning)return result;
  const pending=(await c.db.prepare("SELECT DISTINCT service_date,book_type,id,kind FROM livros.mail_log WHERE status IN ('failed','sending','pending','missing_email','not_configured') AND kind IN ('reminder','schedule') AND created_at>? AND service_date<>'' ORDER BY service_date LIMIT 20").bind(new Date(now.getTime()-23*3600000).toISOString()).all()).results;
  const done=new Set(window.types.map(type=>window.date+':'+type));
  for(const row of pending){
