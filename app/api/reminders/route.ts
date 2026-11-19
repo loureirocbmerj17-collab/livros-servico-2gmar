@@ -1,7 +1,7 @@
 import {mailHash} from '../../mail-service';
 import {timingSafeEqual} from 'node:crypto';
 import {database} from '../../../lib/database';
-import {sendDutyPreview,sendRequestedDrafts,dispatchNotifications} from '../../notifications';
+import {retryMissingEmails,sendDutyPreview,sendRequestedDrafts,dispatchNotifications} from '../../notifications';
 import {loadScale,DEFAULT_FOLDER} from '../../scale';
 export const runtime='nodejs';
 export const maxDuration=300;
@@ -21,6 +21,7 @@ export async function POST(req:Request){
  if(!row)return Response.json({}, {status:403});
  const batch=JSON.parse(row.value);
  if(Date.now()>batch.expires)return Response.json({}, {status:403});
+ if(batch.retryIds)return Response.json(await retryMissingEmails(database,batch.retryIds));
  if(batch.preview)return Response.json({status:await sendDutyPreview(database,key,batch.preview.to,batch.preview.date)});
  const counts=await sendRequestedDrafts(database,batch.books,key.slice(11));
  return Response.json(counts);
