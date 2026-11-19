@@ -31,6 +31,21 @@ export function serviceHeaderDate(text:string){const n=normalize(text),dates:str
  for(const hit of n.matchAll(/SERVICO PARA O DIA\s*:?\s*(\d{1,2})(?:\s+DE\s+([A-Z ]+?)\s+(?:DE\s+)?(20\d{2})|[/.\-](\d{1,2})[/.\-](20\d{2}))/g)){const day=Number(hit[1]),month=hit[2]?monthNumber(hit[2]):Number(hit[4]),year=Number(hit[3]||hit[5]);const value=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');if(!month||month>12||day<1||day>new Date(Date.UTC(year,month,0)).getUTCDate())return '';dates.push(value);}
  return dates.length&&new Set(dates).size===1?dates[0]:'';
 }
+// A missing day may be recovered only from the document title, never from observations.
+export function documentServiceDate(text:string){
+ const normalized=normalize(text),strict=serviceHeaderDate(normalized);
+ if(strict)return strict;
+ if(/SERVICO PARA O DIA\s*:?\s*\d/.test(normalized))return ''; // conflicting/invalid explicit date
+ const headers=[...normalized.matchAll(/SERVICO PARA O DIA\s*:?\s*DE\s+([A-Z ]+?)\s+DE\s+(20\d{2})/g)];
+ if(headers.length!==1)return '';
+ const header=headers[0],month=monthNumber(header[1]),year=Number(header[2]);
+ // Read only the leading title line; the unit name and later dates cannot provide a day.
+ const first=normalize(text.split('\n').find(line=>line.trim())||'');
+ const match=first.match(/^(\d{1,2})\s+(?:DE\s+)?([A-Z ]+?)(?:\s+DE\s+(20\d{2}))?$/);
+ if(!match||!month||monthNumber(match[2])!==month||(match[3]&&Number(match[3])!==year))return '';
+ const day=Number(match[1]);if(day<1||day>new Date(Date.UTC(year,month,0)).getUTCDate())return '';
+ return year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
 type Row={y:number,items:{str:string,x:number,w:number}[]};
 const rules:[number,RegExp][]=[
  [0,/^OF\.? CHEFE DE OPERACOES$/],[1,/^OF\.? (?:DE )?RAS (?:DO |[-–] ?)?2[º°O]? ?GMAR$/],[2,/^OF\.? (?:DE )?RAS (?:AOS DESTACAMENTOS|[-–] ?DBM)$/],
@@ -61,12 +76,13 @@ export async function parseScale(bytes:Uint8Array,expectedDate:string,people:Sca
  const items=tc.items.filter((x:any)=>typeof x.str==='string'&&x.str.trim()) as any[];
  const rows:Row[]=[];for(const item of items.sort((a,b)=>b.transform[5]-a.transform[5])){let row=rows.find(r=>Math.abs(r.y-item.transform[5])<2.7);if(!row){row={y:item.transform[5],items:[]};rows.push(row);}row.items.push({str:item.str,x:item.transform[4],w:item.width});}
  for(const r of rows)r.items.sort((a,b)=>a.x-b.x);
- const text=normalize(rows.map(r=>r.items.map(i=>i.str).join(' ')).join('\n'));
- const serviceDate=serviceHeaderDate(text);
+ const documentText=rows.map(r=>r.items.map(i=>i.str).join(' ')).join('\n');
+ const text=normalize(documentText);
+ const serviceDate=documentServiceDate(documentText);
  if(serviceDate!==expectedDate)throw Error('A data no conteúdo da escala não corresponde ao serviço selecionado. Nenhum dado foi importado.');
  let adjunto='',adjuntoCount=0;const serviceAssignments:{label:string,value:string,rawValue:string}[]=[];
  const dayCrew:string[]=[];const nauticalOperators:string[]=[];let nauticalRow=false;
- const crew=Array(14).fill('') as string[];const evidence:{index:number,label:string,value:string}[]=[];const warnings:string[]=[];const seen=new Set<number>();
+ const crew=Array(14).fill('') as string[];const evidence:{index:number,label:string,value:string}[]=[];const warnings:string[]=serviceHeaderDate(text)?[]:['Dia ausente no cabeçalho: confirmado pelo título do documento e mês/ano do serviço.'];const seen=new Set<number>();
  let left=0,right=0;
  for(const r of rows){const joined=normalize(r.items.map(i=>i.str).join(' '));
  if(joined.startsWith('FUNCAO')&&joined.includes('MILITAR DE SERVICO')&&joined.includes('SOBREAVISO')){

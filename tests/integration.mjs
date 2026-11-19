@@ -139,7 +139,12 @@ await sql.close();
 await import('./personnel-events.mjs');
 
 {
- const {candidateDay,serviceHeaderDate}=await import('../.qa/scale.mjs');
+ const {candidateDay,serviceHeaderDate,documentServiceDate}=await import('../.qa/scale.mjs');
+ for(const title of ['18 DE NOVEMBRO','18 DE NOVEMBRRO'])assert.equal(documentServiceDate(title+'\n2° GMAR\nSERVIÇO PARA O DIA DE NOVEMBRO DE 2026 (FEIRA)'),'2026-11-18');
+ assert.equal(documentServiceDate('18 DE OUTUBRO\nSERVICO PARA O DIA DE NOVEMBRO DE 2026'),'');
+ assert.equal(documentServiceDate('18 DE NOVEMBRO\nSERVICO PARA O DIA 17 DE NOVEMBRO DE 2026'),'2026-11-17');
+ assert.equal(documentServiceDate('2° GMAR\nSERVICO PARA O DIA DE NOVEMBRO DE 2026\n18 DE NOVEMBRO'),'');
+ assert.equal(documentServiceDate('31 DE NOVEMBRO\nSERVICO PARA O DIA DE NOVEMBRO DE 2026'),'');
  assert.equal(candidateDay('13 DE NOVEMBRRO','2026-11-13'),true);
  assert.equal(candidateDay('12 DE NOVEMBRO','2026-11-13'),false);
  for(const title of ['13 DE NOVEMBRRO DE 2026','13 DE NOVEM BRO DE 2026','13 DE NOV DE 2026','13/11/2026'])

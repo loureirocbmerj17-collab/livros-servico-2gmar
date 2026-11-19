@@ -84,6 +84,7 @@ async function processWindow(c:{db:any,scale:(date:string)=>Promise<any>},now:Da
   const result=await deliver(db,now,send,id,window.morning?morningMessage(person.email,personLabel(person),type,date):{to:person.email,subject:'2º GMAR — Preenchimento do Livro '+names[type]+' — '+dateBR,text:'Prezado militar '+personLabel(person)+',\n\nConforme a escala do 2º GMAR, consta sua designação para o Livro '+names[type]+', serviço de '+dateBR+' para '+end+'.\n\nAcesse com RG e senha para preencher e assinar:\n'+appOrigin()+'/?book='+type+'&date='+date+'\n\nCaso tenha ocorrido alteração, troca ou permuta e você não seja o responsável nesta data, desconsidere esta mensagem.\n\nMensagem automática — Sistema de Livros de Serviço do 2º GMAR.'});
   if(result)outcomes.push({type,status:result});
  }
+ await db.prepare("UPDATE livros.mail_log SET status='resolved',detail='Escala localizada pelo leitor compartilhado; falha anterior resolvida.',updated_at=now() WHERE service_date=? AND kind=? AND status='pending'").bind(date,window.morning?'duty_schedule':'schedule').run();
  return {date,outcomes};
 }
 
