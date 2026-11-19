@@ -158,7 +158,7 @@ export async function sendRequestedDrafts(db:any, batch:{type:string,date:string
 export async function retryMissingEmails(db:any,ids:string[],send=sendMail){
  const counts:Record<string,number>={};const add=(s:string)=>counts[s]=(counts[s]||0)+1;
  for(const id of ids.slice(0,100)){
-  const row=await db.prepare("SELECT * FROM livros.mail_log WHERE id=? AND status='missing_email' AND first_attempt_at IS NULL").bind(id).first();
+  const row=await db.prepare("SELECT * FROM livros.mail_log WHERE id=? AND (status='missing_email' OR (status='pending' AND kind='catchup')) AND first_attempt_at IS NULL").bind(id).first();
   if(!row){add('skipped');continue;}
   const table=bookTables[row.book_type];if(!table){add('skipped');continue;}
   const book=await db.prepare('SELECT author,status FROM '+table+' WHERE date=?').bind(row.service_date).first();
@@ -168,7 +168,7 @@ export async function retryMissingEmails(db:any,ids:string[],send=sendMail){
   if(!p?.email){add('missing_email');continue;}
   const label='Livro '+names[row.book_type]+' de '+row.service_date.split('-').reverse().join('/');
   const state=book?'está salvo como rascunho, sem assinatura':'ainda não foi registrado no sistema';
-  const message={to:p.email,subject:'2º GMAR — Pendência: '+label,text:'Prezado militar '+personLabel(p)+',\n\nO '+label+' '+state+'. Este aviso estava pendente por falta de e-mail cadastrado.\n\nAcesse com RG e senha para '+(book?'conferir e assinar na última etapa (não é necessário retificar)':'preencher e assinar')+':\n'+appOrigin()+'/?book='+row.book_type+'&date='+row.service_date+'\n\nSe ainda não acessou, utilize seu RG como login e senha inicial. Confirme seu e-mail e crie uma senha pessoal ao entrar. Caso tenha ocorrido permuta e você não seja o responsável, informe à administração.'};
+  const message={to:p.email,subject:'2º GMAR — Pendência: '+label,text:'Prezado militar '+personLabel(p)+',\n\nO '+label+' '+state+'. Este aviso estava pendente e está sendo encaminhado após a atualização dos dados de contato ou da leitura da escala.\n\nAcesse com RG e senha para '+(book?'conferir e assinar na última etapa (não é necessário retificar)':'preencher e assinar')+':\n'+appOrigin()+'/?book='+row.book_type+'&date='+row.service_date+'\n\nSe ainda não acessou, utilize seu RG como login e senha inicial. Confirme seu e-mail e crie uma senha pessoal ao entrar. Caso tenha ocorrido permuta e você não seja o responsável, informe à administração.'};
   add(await deliver(db,new Date(),send,id,message)||'previous');
  }
  return counts;
