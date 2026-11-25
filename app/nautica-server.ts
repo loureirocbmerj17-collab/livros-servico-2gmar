@@ -19,7 +19,7 @@ export async function nauticalGet(op:string,u:any,url:URL,c:Context){
  if(op==='nauticalList'){return results(c.db,'SELECT date,author_name,status,version FROM livros.nautical_books ORDER BY date DESC');}
  if(op==='nauticalPeople')return results(c.db,'SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name');
  if(op==='nauticalEquipment')return results(c.db,'SELECT * FROM livros.nautical_equipment ORDER BY prefix');
- if(op==='nauticalMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await results(c.db,'SELECT date,author_name,status,version,data,signature,review,updated FROM livros.nautical_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro da Náutica neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DA NÁUTICA',makeNauticalPdf),`Livro-Nautica-${month}.pdf`);}
+ if(op==='nauticalMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await results(c.db,'SELECT date,author,author_name,status,version,data,signature,review,updated FROM livros.nautical_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro da Náutica neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DA NÁUTICA',makeNauticalPdf),`Livro-Nautica-${month}.pdf`);}
  validDate(date);
  if(op==='nauticalFleet'){
  const saved=await one(c.db,'SELECT author,status,review FROM livros.nautical_books WHERE date=?',date);

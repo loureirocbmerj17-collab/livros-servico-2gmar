@@ -19,7 +19,7 @@ export async function ssmtGet(op:string,u:any,url:URL,c:Context){
  if(op==='ssmtList'){return results(c.db,'SELECT date,author_name,status,version FROM livros.ssmt_books ORDER BY date DESC');}
  if(op==='ssmtPeople')return results(c.db,'SELECT rg,name,rank FROM users WHERE active=1 ORDER BY name');
  if(op==='ssmtEquipment')return results(c.db,'SELECT * FROM livros.ssmt_equipment ORDER BY prefix');
- if(op==='ssmtMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await results(c.db,'SELECT date,author_name,status,version,data,signature,review,updated FROM livros.ssmt_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro da SSMT neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DA SSMT',makeSsmtPdf),`Livro-SSMT-${month}.pdf`);}
+ if(op==='ssmtMonthPdf'){if(u.role==='enlisted')fail('Exportação mensal restrita aos oficiais.',403);const month=url.searchParams.get('month')||'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))fail('Mês inválido.');const books=await results(c.db,'SELECT date,author,author_name,status,version,data,signature,review,updated FROM livros.ssmt_books WHERE date LIKE ? ORDER BY date',month+'-%');if(!books.length)fail('Nenhum livro da SSMT neste mês.',404);return c.downloadPdf(await makeMonthlyPdf(month,books,'LIVRO DA SSMT',makeSsmtPdf),`Livro-SSMT-${month}.pdf`);}
  validDate(date);
  if(op==='ssmtRoster')return roster(c,date);
  if(op==='ssmtFleet'){
