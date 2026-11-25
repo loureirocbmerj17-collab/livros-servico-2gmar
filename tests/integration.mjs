@@ -65,7 +65,15 @@ compile(fs.readFileSync('app/api/service/route.ts','utf8').replace("import { DEF
 const {POST,GET}=await import(pathToFileURL(path.join(qa,'route.mjs')));const {blank}=await import(pathToFileURL(path.join(qa,'book-model.mjs')));
 let cookie='';const password='Test-password-42!',setupToken='TEST-ONLY-INITIAL-SETUP-CODE-32-CHARS';process.env.SETUP_TOKEN=setupToken;
 async function post(op,data={},status=200){const r=await POST(new Request('https://test.local/api/service',{method:'POST',headers:{origin:'https://test.local',cookie},body:JSON.stringify({op,...data})}));const v=await r.json();assert.equal(r.status,status,JSON.stringify(v));if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];if(status===200&&op==='user'&&data.email===undefined)await sql.query("UPDATE livros.users SET email=rg||'@example.test' WHERE rg=$1",[String(data.rg)]);return v}
-const get=(params,session=cookie)=>GET(new Request('https://test.local/api/service?'+params,{headers:{cookie:session}}));
+async function get(params,session=cookie){
+ const response=await GET(new Request('https://test.local/api/service?'+params,{headers:{cookie:session}}));
+ if(response.ok&&response.headers.get('content-type')?.includes('application/pdf')){
+  const {extractText}=await import('unpdf');const {text}=await extractText(new Uint8Array(await response.clone().arrayBuffer()),{mergePages:true});
+  assert.doesNotMatch(text,/\b(?:undefined|null)\b/,'PDF sem identificação inválida: '+params);
+  assert.match(text,/RG\s+9999[0-9]/,'PDF mantém RG do signatário: '+params);
+ }
+ return response;
+}
 assert.equal((await get('op=monthPdf&month=2026-10','')).status,401);
 await post('setup',{rg:'99999',name:'TESTE ADMIN',password},403);
 await post('setup',{rg:'99999',name:'TESTE ADMIN',password,setupToken});
