@@ -22,9 +22,9 @@ const retryableStatus = new Set([502, 503, 504]);
 const safeCode = (value: unknown) => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : undefined;
 const waitBeforeRetry = () => new Promise<void>(resolve => setTimeout(resolve, 350));
 
-export async function loadSisgeo(date: string, scope: 'all' | '2GMAR' = 'all'){
+export async function loadSisgeo(date: string){
  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new Error('Data inválida.');
- const body = JSON.stringify({grupamento:scope === '2GMAR' ? scope : codes.join(','),dataInicio:date+' 00:00:00',dataFim:date+' 23:59:59',agrupado:false,evesp:'',somenteFechadas:false});
+ const body = JSON.stringify({grupamento:codes.join(','),dataInicio:date+' 00:00:00',dataFim:date+' 23:59:59',agrupado:false,evesp:'',somenteFechadas:false});
  // The upstream POST only reads statistics. Retry a transport failure or temporary gateway response once.
  for (let attempt = 1; attempt <= 2; attempt++) {
   let response: Response;
@@ -62,7 +62,7 @@ export async function loadSisgeo(date: string, scope: 'all' | '2GMAR' = 'all'){
 }
 
 export async function loadSisgeoUnitStats(date: string) {
- const result = await loadSisgeo(date, '2GMAR');
+ const result = await loadSisgeo(date);
  const unit = result.units.find(entry => entry.code === '2GMAR' && entry.reported);
  if (!unit) throw Object.assign(new Error('SisGeO sem dados confirmados para o 2º GMAR. Preencha manualmente.'), {status: 422});
  return {
