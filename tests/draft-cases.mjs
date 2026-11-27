@@ -24,7 +24,7 @@ await act(()=>{root=create(React.createElement(ReadingWarnings,{data:{inventory:
 await act(()=>{root=create(React.createElement(SigningChecklist,{issues:['Confirme as viaturas']}));});assert.match(JSON.stringify(root.toJSON()),/Confirme as viaturas/);await act(()=>root.unmount());
 console.log('PASS UI safeguards: local autosave, explicit recovery, no signature storage, stale-version and RG isolation, reading warning and signature checklist.');
 // Supervisor interactions: all nine sections, explicit no-occurrence actions, review mode and read-only existing books.
-for(const n of ['captured-scale','form-controls','supervisor-panel','signature-pad','adjunto-fields'])fs.writeFileSync('.qa/'+n+'.mjs',ts.transpileModule(fs.readFileSync('app/'+n+'.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"));
+for(const n of ['attachments-panel','captured-scale','form-controls','supervisor-panel','signature-pad','adjunto-fields'])fs.writeFileSync('.qa/'+n+'.mjs',ts.transpileModule(fs.readFileSync('app/'+n+'.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"));
 fs.writeFileSync('.qa/download.mjs',ts.transpileModule(fs.readFileSync('app/download.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText);
 const {default:CapturedScale}=await import('../.qa/captured-scale.mjs');
 const rawCapture={date:'2035-11-05',assignments:[{label:'OF. CHEFE DE OPERAÇÕES',text:'ALFA FERREIRA'}]};

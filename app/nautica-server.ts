@@ -1,3 +1,4 @@
+import {canonicalAttachments} from './attachment-server';
 import {captureScale} from './service-policy';
 import {syncFleet} from './sisgeo-fleet';
 import {mergeFleetInventory} from './fleet-inventory';
@@ -81,7 +82,7 @@ export async function nauticalPost(op:string,u:any,b:any,c:Context){
  const review=op==='nauticalReview',sign=op==='nauticalSign';if(!review&&old&&old.author!==u.rg)fail('Somente quem confeccionou pode retificar.',403);
  if(review&&(u.role==='enlisted'||!old||old.status!=='Assinado'||old.author===u.rg))fail('O visto exige outro militar, Oficial de Dia, e livro assinado.',403);
  if(review&&JSON.parse(old.review||'{}').rg)fail('Visto do Oficial de Dia já registrado.',409);
- let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');
+ let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');if(!review&&(d.attachments!==undefined||JSON.parse(old?.data||'{}').attachments))d.attachments=await canonicalAttachments(db,u,'nautica',b.date,d.attachments,old);
  if(!review&&d&&Array.isArray(d.stock)&&Array.isArray(d.purchases)&&Array.isArray(d.refuels))d={...d,stock:d.stock.map((s:any)=>({...s,incoming:String(d.purchases.filter((r:any)=>r.fuel===s.fuel).reduce((n:number,r:any)=>n+Number(r.liters||0),0)),outgoing:String(d.refuels.filter((r:any)=>r.fuel===s.fuel).reduce((n:number,r:any)=>n+Number(r.liters||0),0))}))};
  if(!review){d={...d};for(const key of ['radios','chargers','covers'])if(d[key]===undefined||d[key]===null||d[key]==='')d[key]='0';}
  const errors=validateNautical(d,sign);if(errors.length)fail(errors.join(' '));

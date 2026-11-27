@@ -1,3 +1,4 @@
+import {canonicalAttachments} from './attachment-server';
 import {captureScale} from './service-policy';
 import {syncFleet} from './sisgeo-fleet';
 import {mergeFleetInventory} from './fleet-inventory';
@@ -81,7 +82,7 @@ export async function ssmtPost(op:string,u:any,b:any,c:Context){
  const review=op==='ssmtReview',sign=op==='ssmtSign';if(!review&&old&&old.author!==u.rg)fail('Somente quem confeccionou pode retificar.',403);
  if(review&&(u.role==='enlisted'||!old||old.status!=='Assinado'||old.author===u.rg))fail('O visto exige outro militar, Oficial de Dia, e livro assinado.',403);
  if(review&&JSON.parse(old.review||'{}').rg)fail('Visto do Oficial de Dia já registrado.',409);
- let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');
+ let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');if(!review&&(d.attachments!==undefined||JSON.parse(old?.data||'{}').attachments))d.attachments=await canonicalAttachments(db,u,'ssmt',b.date,d.attachments,old);
  if(!review)d={...d,activations:[],refuels:[],purchases:[],stock:[],changes:[],occurrences:[],sisgeoResponsible:''};
  const errors=validateSsmt(d,sign);if(errors.length)fail(errors.join(' '));
  const events=await results(db,'SELECT * FROM livros.assignment_events WHERE date=? AND book_type=? AND actor=? ORDER BY id',b.date,review?'officer':'ssmt',u.rg);

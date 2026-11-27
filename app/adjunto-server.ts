@@ -1,3 +1,4 @@
+import {canonicalAttachments} from './attachment-server';
 import {captureScale} from './service-policy';
 import {manualPersonnel} from './manual-personnel';
 import {adjuntoBlank,validateAdjunto} from './adjunto-model';
@@ -45,7 +46,7 @@ export async function adjuntoPost(op:string,u:any,b:any,c:Context){
  const review=op==='adjuntoReview',sign=op==='adjuntoSign';
  if(!review&&old&&old.author!==u.rg)fail('Somente quem confeccionou pode retificar.',403);
  if(review&&(u.role==='enlisted'||!old||old.status!=='Assinado'||old.author===u.rg))fail('O visto exige outro militar, Oficial de Dia, em livro assinado.',403);
- let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');const errors=validateAdjunto(d,sign);if(errors.length)fail(errors.join(' '));
+ let d=review?JSON.parse(old.data):b.data;if(!d||d.date!==b.date)fail('Dados inválidos.');if(!review&&(d.attachments!==undefined||JSON.parse(old?.data||'{}').attachments))d.attachments=await canonicalAttachments(db,u,'adjunto',b.date,d.attachments,old);const errors=validateAdjunto(d,sign);if(errors.length)fail(errors.join(' '));
  const events=await rows(db,'SELECT * FROM livros.assignment_events WHERE date=? AND book_type=? AND actor=? ORDER BY id',b.date,review?'officer':'adjunto',u.rg);
  const r=await roster(c,b.date);
  if(!review){if((!old||sign)&&r.responsible!==u.rg&&!events.length)fail('Seu RG deve constar como Adjunto na escala. Use Solucionar responsabilidade.',403);

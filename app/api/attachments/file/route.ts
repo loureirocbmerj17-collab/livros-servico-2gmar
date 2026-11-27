@@ -1,0 +1,8 @@
+import {createHash} from 'node:crypto';
+import {database} from '../../../../lib/database';
+import {attachmentUser,attachmentError} from '../../../attachment-auth';
+import {attachmentMaxBytes} from '../../../attachment-model';
+import {accessibleAttachment,attachmentFail} from '../../../attachment-server';
+import {driveToken,driveBytes} from '../../../drive-server';
+export const runtime='nodejs';export const dynamic='force-dynamic';export const maxDuration=60;
+export async function GET(req:Request){const q=new URL(req.url).searchParams;try{const u=await attachmentUser(req),a=await accessibleAttachment(database,u,q.get('id')||''),preview=q.get('preview')==='1';if(preview&&!a.preview_id)attachmentFail('Miniatura indisponível.',404);const bytes=await driveBytes(preview?a.preview_id:a.drive_id,await driveToken(),preview?60000:attachmentMaxBytes);if(!preview&&createHash('sha256').update(bytes).digest('hex')!==a.sha256)attachmentFail('O arquivo foi alterado fora do sistema. Contate a administração para verificar o original.',409);return new Response(bytes,{headers:{'Content-Type':preview?'image/jpeg':a.mime,'Content-Disposition':`${q.get('download')==='1'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(preview?'miniatura.jpg':a.name)}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'",'Referrer-Policy':'no-referrer'}});}catch(e:any){if(e.status===401&&!q.has('preview')&&/^[-a-f0-9]{36}$/.test(q.get('id')||''))return new Response(null,{status:303,headers:{Location:'/?'+new URLSearchParams({attachment:q.get('id')!,...(q.get('download')==='1'?{download:'1'}:{})}),'Cache-Control':'no-store'}});return attachmentError(e);}}

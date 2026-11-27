@@ -1,3 +1,4 @@
+import {drawAttachments} from './attachments-pdf';
 import {PDFDocument,rgb,PDFPage,PDFFont} from 'pdf-lib';
 import {stockEnd} from './nautica-model';
 import fontkit from '@pdf-lib/fontkit';
@@ -52,7 +53,8 @@ export async function makeNauticalPdf(book:any){
  if(d.assignmentAudit)block('AUDIT','RETIFICAÇÃO DA RESPONSABILIDADE',d.assignmentAudit,40);
  const review=book.review?JSON.parse(book.review):null;
  if(review?.assignmentAudit)block('AUDIT','RETIFICAÇÃO DO OFICIAL DE DIA',review.assignmentAudit,40);
- ensure(330,'Assinaturas e encerramento');section('10','ASSINATURAS E CONFERÊNCIA');
+ ensure(330,'Assinaturas e encerramento');await drawAttachments({doc,regular,bold,page:()=>page,y:()=>y,setY:v=>{y=v;},ensure,section},book,'nautica');
+ section('10','ASSINATURAS E CONFERÊNCIA');
  function signature(title:string,name:string,raw:string,proof:string){ensure(150,'Assinaturas e encerramento');text(title,M,y,10,bold,C.navy);y+=20;const drawing=readDrawing(raw);if(drawing){const scale=.30,x=M+165,top=y;for(const s of drawing.strokes)for(let i=1;i<s.length;i++)page.drawLine({start:{x:x+s[i-1][0]*scale,y:H-top-s[i-1][1]*scale},end:{x:x+s[i][0]*scale,y:H-top-s[i][1]*scale},thickness:1.1,color:C.ink});}else text('Assinatura pendente.',M+15,y+20,9,regular,C.muted);y+=58;line(M+50,y,M+CW-50);y+=6;for(const s of wrap(name,CW,regular,9)){text(s,M,y,9,bold);y+=12;}for(const s of wrap(proof||'Confirmação por senha pendente.',CW,regular,7)){ensure(12);text(s,M,y,7,regular,C.muted);y+=10;}y+=18;}
  signature('OPERADOR RESPONSÁVEL',book.author_name+' / RG '+book.author,book.signature?d.signatureDrawing:'',book.signature);
  if(review?.chief)signature('CONFERÊNCIA DO CHEFE DE NÁUTICA',review.chief.name+' / RG '+review.chief.rg,review.chief.drawing,review.chief.attestation);

@@ -1,3 +1,4 @@
+import {canonicalAttachments} from '../../attachment-server';
 import {personalDrafts} from '../../notifications';
 import {applyPersonnelEvents} from '../../personnel-events';
 import {captureScale} from '../../service-policy';
@@ -132,7 +133,7 @@ export async function POST(req:Request){try{
  if(op==='review'&&(u.role!=='reviewer'||!old||old.status!=='Assinado'))fail('A conferência exige perfil de subcomandante e livro assinado.',403);
  if(op==='review'&&old.author===u.rg)fail('Outro subcomandante deve conferir o livro que você confeccionou.',403);
  const data=op==='review'?JSON.parse(old.data):b.data;
- if(!data||typeof data!=='object'||data.date!==b.date)fail('Conteúdo ou data inválidos.');
+ if(!data||typeof data!=='object'||data.date!==b.date)fail('Conteúdo ou data inválidos.');if(op!=='review'&&(data.attachments!==undefined||JSON.parse(old?.data||'{}').attachments))data.attachments=await canonicalAttachments(db(),u,'officer',b.date,data.attachments,old);
  for(const key of ['crew','support','prevention','rescues','physical','forms'])if(!Array.isArray(data[key])||data[key].some((v:any)=>typeof v!=='string'))fail('Campos inválidos.');
  if(data.crew.length===12&&op!=='review')data.crew=[...data.crew,'',''];
  if(![12,roles.length].includes(data.crew.length)||data.support.length!==8||['prevention','rescues','physical','forms'].some(k=>data[k].length!==4))fail('Quantidades de campos inválidas.');

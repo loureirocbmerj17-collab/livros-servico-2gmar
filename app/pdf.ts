@@ -1,3 +1,4 @@
+import {drawAttachments} from './attachments-pdf';
 import {PDFDocument,rgb,PDFPage,PDFFont} from 'pdf-lib';
 import {roles,units,support} from './book-model';
 import fontkit from '@pdf-lib/fontkit';
@@ -54,7 +55,8 @@ export async function makePdf(book:any){
  block('13','OUTRAS OBSERVAÇÕES',d.notes,60);
  if(d.assignmentAudit)block('REGISTRO','RETIFICAÇÃO DE RESPONSABILIDADE',d.assignmentAudit,45);
  if(d.dependencySummary)block('CONTROLE','OUTROS LIVROS: SITUAÇÃO NA ASSINATURA DO AUTOR',d.dependencySummary,60);
- ensure(202+10*(wrap(book.signature||'Pendente.',CW-20,regular,7).length+wrap(book.review||'Pendente.',CW-20,regular,7).length),'Encerramento e assinaturas');section('VISTO','ENCERRAMENTO E ASSINATURAS');
+ ensure(202+10*(wrap(book.signature||'Pendente.',CW-20,regular,7).length+wrap(book.review||'Pendente.',CW-20,regular,7).length),'Encerramento e assinaturas');await drawAttachments({doc,regular,bold,page:()=>page,y:()=>y,setY:v=>{y=v;},ensure,section},book,'officer');
+ section('VISTO','ENCERRAMENTO E ASSINATURAS');
  rect(M,y,CW,104,C.white,C.line);
  const drawing=book.signature?readDrawing(d.signatureDrawing):null;
  if(drawing){const scale=.4,x=M+(CW-600*scale)/2,top=y+2;for(const stroke of drawing.strokes)for(let i=1;i<stroke.length;i++)page.drawLine({start:{x:x+stroke[i-1][0]*scale,y:H-top-stroke[i-1][1]*scale},end:{x:x+stroke[i][0]*scale,y:H-top-stroke[i][1]*scale},thickness:1.15,color:C.ink});}
