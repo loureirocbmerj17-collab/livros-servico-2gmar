@@ -1,3 +1,5 @@
+import { request } from 'node:https';
+
 export const SISGEO_URL='https://sisgeo.cbmerj.rj.gov.br/Sisgeo/Mar/GetConsultaParciaisMaritimo';
 const codes=['2GMAR','D3/M','D4/M','D5/M'];
 const metrics=['PrevencaoTotal','ResgateTotal','PerdidoTotal','ApoioTotal','OutroTotal'];
@@ -22,22 +24,67 @@ const retryableStatus = new Set([502, 503, 504]);
 const safeCode = (value: unknown) => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : undefined;
 const waitBeforeRetry = () => new Promise<void>(resolve => setTimeout(resolve, 350));
 
-export async function loadSisgeo(date: string){
+const jsonHeaders = {'Content-Type': 'application/json', Accept: 'application/json'};
+
+function queryWithFreshConnection(body: string, signal: AbortSignal): Promise<Response> {
+ return new Promise((resolve, reject) => {
+  const req = request(SISGEO_URL, {
+   method: 'POST',
+   headers: {...jsonHeaders, 'Content-Length': Buffer.byteLength(body)},
+   agent: false,
+   signal,
+  }, res => {
+   const status = res.statusCode ?? 502;
+   const type = res.headers['content-type'] ?? '';
+   if (status < 200 || status >= 300 || !type.includes('application/json') || status === 204 || status === 205) {
+    res.destroy();
+    resolve(new Response(null, {status, headers: {'Content-Type': type}}));
+    return;
+   }
+   const chunks: Buffer[] = [];
+   let bytes = 0;
+   res.on('error', reject);
+   res.on('data', (chunk: Buffer) => {
+    bytes += chunk.length;
+    if (bytes > 4000000) {
+     req.destroy(new Error('Resposta do SisGeO excedeu o limite.'));
+     return;
+    }
+    chunks.push(chunk);
+   });
+   res.on('end', () => resolve(new Response(Buffer.concat(chunks).toString('utf8'), {
+    status, headers: {'Content-Type': type},
+   })));
+  });
+  req.on('error', reject);
+  req.end(body);
+ });
+}
+
+export async function loadSisgeo(date: string, freshConnection = queryWithFreshConnection){
  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new Error('Data inválida.');
  const body = JSON.stringify({grupamento:codes.join(','),dataInicio:date+' 00:00:00',dataFim:date+' 23:59:59',agrupado:false,evesp:'',somenteFechadas:false});
  // The upstream POST only reads statistics. Retry a transport failure or temporary gateway response once.
+ let useFreshConnection = false;
  for (let attempt = 1; attempt <= 2; attempt++) {
   let response: Response;
   let payload: string | undefined;
   const signal = AbortSignal.timeout(attempt === 1 ? 18000 : 23000);
   try {
-   response = await fetch(SISGEO_URL,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body,redirect:'manual',signal});
+   response = useFreshConnection
+    ? await freshConnection(body, signal)
+    : await fetch(SISGEO_URL,{method:'POST',headers:jsonHeaders,body,redirect:'manual',signal});
    if(response.ok && response.headers.get('content-type')?.includes('application/json')) payload = await response.text();
    else await response.body?.cancel().catch(()=>{});
   } catch(error) {
    const failure = error as {code?:unknown,cause?:{code?:unknown}};
-   console.warn('sisgeo_stats_transport_failure',{date,attempt,timeout:signal.aborted,code:safeCode(failure?.cause?.code)??safeCode(failure?.code)??'UNKNOWN'});
-   if(attempt===1){await waitBeforeRetry();continue;}
+   const code = safeCode(failure?.cause?.code) ?? safeCode(failure?.code) ?? 'UNKNOWN';
+   console.warn('sisgeo_stats_transport_failure',{date,attempt,timeout:signal.aborted,code,transport:useFreshConnection?'https':'fetch'});
+   if(attempt===1){
+    useFreshConnection = code === 'UND_ERR_CONNECT_TIMEOUT';
+    await waitBeforeRetry();
+    continue;
+   }
    throw sisgeoUnavailable(signal.aborted
     ? 'O SisGeO demorou a responder. Tente novamente ou preencha manualmente.'
     : 'Não foi possível conectar ao SisGeO. Tente novamente ou preencha manualmente.');
