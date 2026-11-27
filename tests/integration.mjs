@@ -184,3 +184,27 @@ await import('./personnel-events.mjs');
   await assert.rejects(loadSisgeo(date),/restringiu o acesso/);assert.equal(attempts,1);
  }finally{globalThis.fetch=previous;console.warn=warn;}
 }
+
+// Each book asks for the coverage it displays. Adjunto keeps deaths as a manual field.
+{
+ const {loadSisgeo}=await import('../.qa/sisgeo.mjs');
+ const {supervisorGet}=await import('../.qa/supervisor-server.mjs');
+ const {adjuntoGet}=await import('../.qa/adjunto-server.mjs');
+ const previous=globalThis.fetch;
+ const queries=[];
+ globalThis.fetch=async(_url,options)=>{
+  queries.push(JSON.parse(options.body));
+  return Response.json([{Grupamento:'2GMAR',Posto:'TESTE',CodigoParcial:1,PrevencaoTotal:8,ResgateTotal:2,PerdidoTotal:1,ApoioTotal:0,OutroTotal:0}]);
+ };
+ try{
+  const date='2026-11-27',url=new URL('https://example.test/?date='+date);
+  const officer=await loadSisgeo(date);
+  const supervisor=await supervisorGet('supervisorStats',{},url,{});
+  const adjunto=await adjuntoGet('adjuntoStats',{},url,{});
+  assert.deepEqual(queries.map(q=>q.grupamento),['2GMAR,D3/M,D4/M,D5/M','2GMAR','2GMAR']);
+  assert.ok(queries.every(q=>q.dataInicio===date+' 00:00:00'&&q.dataFim===date+' 23:59:59'));
+  assert.deepEqual(officer.patch.prevention,['8','','','']);
+  assert.deepEqual(supervisor.stats,{preventions:'8',rescues:'2',lost:'1'});
+  assert.deepEqual(adjunto.stats,{preventions:'8',rescues:'2'});
+ }finally{globalThis.fetch=previous;}
+}
