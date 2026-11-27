@@ -95,6 +95,21 @@ export async function POST(req:Request){try{
  return json({ok:true},200,await issue(rg));}
  if(!u)fail('Sessão encerrada. Entre novamente.',401);
  if(needsProfile(u)&&op!=='logout')fail('Atualize seu cadastro e crie uma senha pessoal para continuar.',428);
+ if(op==='sisgeo'){
+  const book = b.book ?? 'officer';
+  if (!['officer','supervisor','adjunto'].includes(book)) fail('Livro inválido.');
+  if (book==='officer' && u.role==='enlisted') fail('Este acesso é restrito aos oficiais.',403);
+  if (book!=='officer') {
+   const url=new URL(req.url);
+   url.searchParams.set('date',typeof b.date==='string'?b.date:'');
+   const context=nauticalContext();
+   return json(book==='supervisor'
+    ? await supervisorGet('supervisorStats',u,url,context)
+    : await adjuntoGet('adjuntoStats',u,url,context));
+  }
+  try { return json({found:true,...await loadSisgeo(b.date)}); }
+  catch(e:any) { return json({found:false,message:e.message}); }
+ }
  if(typeof op==='string'&&op.startsWith('adjunto'))return json(await adjuntoPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('supervisor'))return json(await supervisorPost(op,u,b,nauticalContext()));
  if(typeof op==='string'&&op.startsWith('ssmt'))return json(await ssmtPost(op,u,b,nauticalContext()));
@@ -112,7 +127,6 @@ export async function POST(req:Request){try{
  return json({ok:true,removed:files.length});
  }
  if(op==='resolveAssignment'){if(!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||isNaN(Date.parse(b.date)))fail('Data inválida.');const reason=String(b.reason||'').trim();if(reason.length<20||reason.length>1500)fail('Descreva o motivo da substituição com 20 a 1500 caracteres.');const old=await db().prepare('SELECT author,status FROM books WHERE date=?').bind(b.date).first<any>();if(old&&(old.author!==u.rg||old.status==='Conferido'))fail('Este livro não permite alteração de responsabilidade.',403);if(!await check(String(b.password||''),u.password))fail('Confirme sua senha para registrar a substituição.',401);let previous='Escala indisponível';try{const folder=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();previous=(await loadUnitScale(b.date)).crew[0]||'Oficial não identificado na escala';}catch{}const replacement=`${u.rank||''} ${u.name} RG ${u.rg}`.trim();await db().prepare('INSERT INTO livros.assignment_events(date,book_type,actor,previous_assignment,replacement,reason,created_at) VALUES(?,?,?,?,?,?,?)').bind(b.date,'officer',u.rg,previous,replacement,reason,new Date().toISOString()).run();return json({replacement});}
- if(op==='sisgeo'){try{return json({found:true,...await loadSisgeo(b.date)});}catch(e:any){return json({found:false,message:e.message});}}
  if(op==='scaleConfig'){if(u.role!=='admin')fail('Apenas a administração pode alterar a pasta.',403);const id=folderId(String(b.folder||''));await db().batch([db().prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind('scaleFolder',id),db().prepare('INSERT INTO admin_log(actor,action,updated) VALUES(?,?,?)').bind(u.rg,'Pasta de escalas alterada para '+id,new Date().toISOString())]);return json({folder:id});}
  if(op==='scale'){if(!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||isNaN(Date.parse(b.date)))fail('Data inválida.');const row=await db().prepare('SELECT value FROM settings WHERE key=?').bind('scaleFolder').first<any>();try{const scale=await loadUnitScale(b.date);return json({found:true,...scale,capture:captureScale(scale)});}catch(e:any){return json({found:false,message:e.name==='TimeoutError'?'O Drive demorou a responder. Tente novamente ou preencha manualmente.':e.message});}}
  if(op==='logout'){const token=req.headers.get('cookie')?.match(/(?:^|;\s*)gmar_session=([^;]+)/)?.[1];if(token)await db().prepare('DELETE FROM sessions WHERE id=?').bind(await hash(token)).run();return json({ok:true},200,{'Set-Cookie':'gmar_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0'});}
