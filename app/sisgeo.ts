@@ -12,7 +12,7 @@ export function parseSisgeo(rows:any,date:string){
   seen[i]=true;metrics.forEach((k,j)=>{sums[i][j]+=r[k];if(!Number.isSafeInteger(sums[i][j]))throw new Error('Quantitativo inválido.');});
   const name=r.Posto.trim(),key=r.Grupamento+'|'+name;const p=posts.get(key)||{unit:r.Grupamento,post:name,prevention:0,rescues:0};p.prevention+=r.PrevencaoTotal;p.rescues+=r.ResgateTotal;posts.set(key,p);
  }
- if(!seen.some(Boolean))throw new Error('Não há lançamentos identificados para este dia. Campos mantidos; ausência de lançamento não significa zero.');
+ if(!seen.some(Boolean))throw Object.assign(new Error('Não há lançamentos identificados para este dia. Campos mantidos; ausência de lançamento não significa zero.'), {status: 422});
  const patch:any={prevention:sums.map((s,i)=>seen[i]?String(s[0]):''),rescues:sums.map((s,i)=>seen[i]?String(s[1]):'')};
  if(seen.every(Boolean))for(const [key,metric] of [['topPrevention','prevention'],['topRescue','rescues']]){const max=Math.max(...Array.from(posts.values()).map(p=>p[metric]));patch[key]=max?Array.from(posts.values()).filter(p=>p[metric]===max).map(p=>`${p.post} (${p.unit})`).join('; '):'NÃO HOUVE';patch[key+'Count']=String(max);}
  return {date,patch,units:codes.map((code,i)=>({code,reported:seen[i],prevention:sums[i][0],rescues:sums[i][1],lost:sums[i][2],aid:sums[i][3],other:sums[i][4]})),warnings:[...seen.flatMap((v,i)=>v?[]:[`Sem lançamento identificado em ${codes[i]}; os campos desta unidade serão preservados.`]),'Consulta inclui registros em andamento. Confira os quantitativos antes de assinar.'],source:{provider:'SisGeO',date,queriedAt:new Date().toISOString(),onlyClosed:false}};
@@ -22,14 +22,14 @@ const retryableStatus = new Set([502, 503, 504]);
 const safeCode = (value: unknown) => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value) ? value : undefined;
 const waitBeforeRetry = () => new Promise<void>(resolve => setTimeout(resolve, 350));
 
-export async function loadSisgeo(date:string){
+export async function loadSisgeo(date: string, scope: 'all' | '2GMAR' = 'all'){
  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)throw new Error('Data inválida.');
- const body = JSON.stringify({grupamento:codes.join(','),dataInicio:date+' 00:00:00',dataFim:date+' 23:59:59',agrupado:false,evesp:'',somenteFechadas:false});
+ const body = JSON.stringify({grupamento:scope === '2GMAR' ? scope : codes.join(','),dataInicio:date+' 00:00:00',dataFim:date+' 23:59:59',agrupado:false,evesp:'',somenteFechadas:false});
  // The upstream POST only reads statistics. Retry a transport failure or temporary gateway response once.
  for (let attempt = 1; attempt <= 2; attempt++) {
   let response: Response;
   let payload: string | undefined;
-  const signal = AbortSignal.timeout(10000);
+  const signal = AbortSignal.timeout(attempt === 1 ? 18000 : 23000);
   try {
    response = await fetch(SISGEO_URL,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body,redirect:'manual',signal});
    if(response.ok && response.headers.get('content-type')?.includes('application/json')) payload = await response.text();
@@ -59,4 +59,15 @@ export async function loadSisgeo(date:string){
   return parseSisgeo(rows,date);
  }
  throw sisgeoUnavailable('O SisGeO está indisponível. Preencha manualmente.');
+}
+
+export async function loadSisgeoUnitStats(date: string) {
+ const result = await loadSisgeo(date, '2GMAR');
+ const unit = result.units.find(entry => entry.code === '2GMAR' && entry.reported);
+ if (!unit) throw Object.assign(new Error('SisGeO sem dados confirmados para o 2º GMAR. Preencha manualmente.'), {status: 422});
+ return {
+  stats: {rescues: String(unit.rescues), preventions: String(unit.prevention)},
+  lost: String(unit.lost),
+  source: result.source,
+ };
 }

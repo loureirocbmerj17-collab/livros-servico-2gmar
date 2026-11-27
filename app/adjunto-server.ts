@@ -8,7 +8,7 @@ import {personLabel} from './person-label';
 import {readDrawing} from './handwriting';
 import {makeAdjuntoPdf} from './adjunto-pdf';
 import {makeMonthlyPdf} from './monthly-pdf';
-import {loadSisgeo} from './sisgeo';
+import {loadSisgeoUnitStats} from './sisgeo';
 type Context={db:any,check:(p:string,s:string)=>Promise<boolean>,hash:(s:string)=>Promise<string>,scale:(date:string)=>Promise<any>,downloadPdf:(bytes:Uint8Array,name:string)=>Response};
 const fail=(message:string,status=400):never=>{throw Object.assign(new Error(message),{status})};
 const validDate=(date:string)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)fail('Data inválida.');};
@@ -25,7 +25,7 @@ export async function adjuntoGet(op:string,u:any,url:URL,c:Context){
  const values=[r.crew[0],r.crew[1],r.crew[11],r.crew[4],undefined,[r.crew[8],r.crew[9],r.crew[10]].filter(Boolean).join('; '),r.crew[6],r.crew[7],r.crew[12],r.crew[13]];
  d.serviceCrew=d.serviceCrew.map((row:any,i:number)=>({...row,military:values[i]||r.assignments.filter((a:any)=>i===4?/PERMANENCIA/i.test(a.label):i===10?/APROVISIONAMENTO|APROVISIONADOR/i.test(a.label):i>=11?new RegExp('SUPERVISOR.*SETOR.*'+(i-10),'i').test(a.label):false).map((a:any)=>a.value).join('; ')}));return {roster:r,blank:d};}
  if(op==='adjuntoForecast')return adjuntoForecast(date);
- if(op==='adjuntoStats'){const s=await loadSisgeo(date);const unit=s.units.find((v:any)=>v.code==='2GMAR');if(!unit?.reported)fail('SISGEO sem dados confirmados para o 2º GMAR. Preencha manualmente.');return {stats:{rescues:String(unit!.rescues),preventions:String(unit!.prevention)},source:s.source};}
+ if(op==='adjuntoStats'){const {stats,source}=await loadSisgeoUnitStats(date);return {stats:stats,source};}
  const book=await one(c.db,'SELECT * FROM livros.adjunto_books WHERE date=?',date);
  if(op==='adjuntoBook')return book?{...book,pdf:undefined,data:JSON.parse(book.data),review:book.review?JSON.parse(book.review):null}:null;
  if(op==='adjuntoHistory')return rows(c.db,'SELECT version,actor,updated,status FROM livros.adjunto_revisions WHERE date=? ORDER BY version DESC',date);

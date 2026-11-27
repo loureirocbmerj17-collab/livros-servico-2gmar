@@ -8,7 +8,7 @@ import {personLabel} from './person-label';
 import {readDrawing} from './handwriting';
 import {makeSupervisorPdf} from './supervisor-pdf';
 import {makeMonthlyPdf} from './monthly-pdf';
-import {loadSisgeo} from './sisgeo';
+import {loadSisgeoUnitStats} from './sisgeo';
 type Context={db:any,check:(p:string,s:string)=>Promise<boolean>,hash:(s:string)=>Promise<string>,scale:(date:string)=>Promise<any>,downloadPdf:(bytes:Uint8Array,name:string)=>Response};
 const fail=(message:string,status=400):never=>{throw Object.assign(new Error(message),{status})};
 const validDate=(date:string)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)fail('Data inválida.');};
@@ -23,7 +23,7 @@ export async function supervisorGet(op:string,u:any,url:URL,c:Context){
  validDate(date);
  if(op==='supervisorContext'){const r=await roster(c,date);const d=supervisorBlank(date);d.responsible=r.responsible;(d as any).scaleCapture=(r as any).capture;d.officerRg=r.officerRg;if(r.posts.length)d.posts=r.posts;return {roster:r,blank:d};}
  if(op==='supervisorForecast')return supervisorForecast(date);
- if(op==='supervisorStats'){const s=await loadSisgeo(date);const unit=s.units.find((v:any)=>v.code==='2GMAR');if(!unit?.reported)fail('SISGEO sem dados confirmados para o 2º GMAR. Preencha manualmente.');return {stats:{rescues:String(unit!.rescues),lost:String(unit!.lost),preventions:String(unit!.prevention)},source:s.source};}
+ if(op==='supervisorStats'){const {stats,source,lost}=await loadSisgeoUnitStats(date);return {stats:{...stats,lost},source};}
  const book=await one(c.db,'SELECT * FROM livros.supervisor_books WHERE date=?',date);
  if(op==='supervisorBook')return book?{...book,pdf:undefined,data:JSON.parse(book.data),review:book.review?JSON.parse(book.review):null}:null;
  if(op==='supervisorHistory')return rows(c.db,'SELECT version,actor,updated,status FROM livros.supervisor_revisions WHERE date=? ORDER BY version DESC',date);
