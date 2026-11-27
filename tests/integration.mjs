@@ -166,3 +166,21 @@ await import('./personnel-events.mjs');
  assert.equal(serviceHeaderDate('SERVICO PARA O DIA 12/11/2026'),'2026-11-12');
  console.log('PASS scale dates: typo, split month, abbreviation, numeric header, invalid dates and conflicts.');
 }
+
+// SisGeO stats transport regressions: recover transient failure, report persistent failure, preserve auth boundary.
+{
+ const {loadSisgeo}=await import('../.qa/sisgeo.mjs');
+ const previous=globalThis.fetch, warn=console.warn;
+ const date='2026-11-26';
+ const rows=[{Grupamento:'2GMAR',Posto:'TESTE',CodigoParcial:1,PrevencaoTotal:3,ResgateTotal:0,PerdidoTotal:0,ApoioTotal:0,OutroTotal:0}];
+ let attempts=0;
+ try{
+  console.warn=()=>{};
+  globalThis.fetch=async()=>{if(++attempts===1)throw new TypeError('fetch failed',{cause:{code:'ECONNRESET'}});return Response.json(rows);};
+  assert.equal((await loadSisgeo(date)).patch.prevention[0],'3');assert.equal(attempts,2);
+  attempts=0;globalThis.fetch=async()=>{attempts++;throw new TypeError('fetch failed');};
+  await assert.rejects(loadSisgeo(date),{message:/Não foi possível conectar/,status:503});assert.equal(attempts,2);
+  attempts=0;globalThis.fetch=async()=>{attempts++;return new Response(null,{status:302,headers:{Location:'/Sisgeo/Entrar'}});};
+  await assert.rejects(loadSisgeo(date),/restringiu o acesso/);assert.equal(attempts,1);
+ }finally{globalThis.fetch=previous;console.warn=warn;}
+}
