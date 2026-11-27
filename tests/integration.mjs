@@ -1,7 +1,7 @@
 import ts from 'typescript';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';import {PGlite} from '@electric-sql/pglite';import {PDFDocument} from 'pdf-lib';
 const qa=path.resolve('.qa');fs.mkdirSync(qa,{recursive:true});
-function compile(source,dest){fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
-for(const n of ['personnel-events','sisgeo-fleet','fleet-inventory','mail-service','account-server','manual-personnel','notifications','book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale','adjunto-model','adjunto-server','adjunto-pdf','signature-import'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
+function compile(source,dest){source=source.replace("import {database} from '../lib/database';","const database={prepare:(...args)=>globalThis.testDb.prepare(...args),batch:(...args)=>globalThis.testDb.batch(...args)};");fs.writeFileSync(path.join(qa,dest+'.mjs'),ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from '\.\/([^']+)'/g,"from './$1.mjs'"))}
+for(const n of ['attachment-model','attachment-server','drive-server','attachments-pdf','personnel-events','sisgeo-fleet','fleet-inventory','mail-service','account-server','manual-personnel','notifications','book-model','brand','handwriting','pdf-fonts','pdf','scale','sisgeo','monthly-pdf','service-policy','person-label','nautica-model','nautica-brand','nautica-pdf','nautica-server','ssmt-model','ssmt-pdf','ssmt-server','supervisor-model','supervisor-weather','supervisor-pdf','supervisor-server','beach-scale','adjunto-model','adjunto-server','adjunto-pdf','signature-import'])compile(fs.readFileSync('app/'+n+'.ts','utf8'),n);
 compile(fs.readFileSync('lib/database.ts','utf8'),'database');compile(fs.readFileSync('lib/storage.ts','utf8'),'storage');
 const {folderFiles,matchesDay,newestScale,driveFileTimes,folderSubfolders,monthFolder}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
 const {resolveScaleName,parseScale}=await import(pathToFileURL(path.join(qa,'scale.mjs')));
@@ -56,6 +56,7 @@ await sql.exec(fs.readFileSync('supabase/access-rules.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/nautica.sql','utf8'));await sql.exec(fs.readFileSync('supabase/ssmt.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/migrations/20261031011506_supervisor_book.sql','utf8'));
 await sql.exec(fs.readFileSync('supabase/migrations/20261031180758_account_mail_notifications.sql','utf8').replace(',anon,authenticated',''));
+await sql.exec(fs.readFileSync('supabase/migrations/20261127160737_private_book_attachments.sql','utf8').replace(',anon,authenticated',''));
 const {createDatabase}=await import(pathToFileURL(path.join(qa,'database.mjs')));
 const client={async query(q,values){const r=await sql.query(q,values);return {rows:r.rows,rowCount:r.affectedRows??r.rows.length}},release(){}};
 globalThis.testDb=createDatabase(()=>({...client,async connect(){return client}}));
@@ -142,6 +143,8 @@ await import('./review-queue.mjs').then(m=>m.run({post,get,sql,password}));
 await import('./form-audit.mjs').then(m=>m.run({post,get,sql,password,drawing}));
 await import('./account-notifications.mjs').then(m=>m.run({post,get,sql,password,qa}));
 await import('./fleet-cases.mjs').then(m=>m.run({sql,get,post,password}));
+await import('./attachment-cases.mjs').then(m=>m.run({sql,get,post,password}));
+await import('./attachment-http.mjs').then(m=>m.run({sql}));
 await sql.close();
 
 await import('./personnel-events.mjs');

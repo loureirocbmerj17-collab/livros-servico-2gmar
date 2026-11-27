@@ -1,0 +1,17 @@
+import {AsyncLocalStorage} from 'node:async_hooks';
+const previewBudget=new AsyncLocalStorage<AbortSignal>();
+export function withAttachmentPreviews<T>(fn:()=>Promise<T>){return previewBudget.run(AbortSignal.timeout(6000),fn);}
+import {PDFDocument,PDFFont,PDFPage,PDFName,PDFString,rgb} from 'pdf-lib';
+import {database} from '../lib/database';
+import {driveBytes,driveToken} from './drive-server';
+import {attachmentUrl,AttachmentKind,Attachment} from './attachment-model';
+type Layout={doc:PDFDocument,regular:PDFFont,bold:PDFFont,page:()=>PDFPage,y:()=>number,setY:(v:number)=>void,ensure:(h:number)=>void,section:(n:string,t:string)=>void};
+async function previewBytes(a:Attachment,kind:AttachmentKind,date:string,signal?:AbortSignal){const row=await database.prepare('SELECT preview_id,sha256 FROM livros.book_attachments WHERE id=? AND book_type=? AND service_date=? AND status=?').bind(a.id,kind,date,'ready').first<any>();if(!row?.preview_id||row.sha256!==a.sha256)return null;return driveBytes(row.preview_id,await driveToken(signal),60000,signal);}
+export async function drawAttachments(l:Layout,book:any,kind:AttachmentKind,load=previewBytes){const data=typeof book.data==='string'?JSON.parse(book.data):book.data;const items:Attachment[]=data.attachments||[];if(!items.length)return;const signal=previewBudget.getStore()||AbortSignal.timeout(6000);l.section('ANEXOS','DOCUMENTOS DO SERVIÇO');const origin=process.env.APP_ORIGIN||'https://livros-servico-2gmar.vercel.app';const navy=rgb(.055,.16,.29),grey=rgb(.36,.41,.47);const clean=(s:string)=>String(s).replace(/[^\x20-\x7e\xa0-\xff]/g,' ');const fit=(s:string,width:number,font:PDFFont,size:number)=>{let v=clean(s);while(font.widthOfTextAtSize(v,size)>width)v=v.slice(0,-1);return v;};
+ for(const [i,a] of items.entries()){l.ensure(96);const p=l.page(),top=l.y(),H=p.getHeight();p.drawRectangle({x:36,y:H-top-84,width:523,height:84,color:rgb(.97,.98,.99),borderColor:rgb(.8,.83,.86),borderWidth:.5});let image:any=null;if(a.preview&&!signal.aborted)try{const bytes=await load(a,kind,book.date,signal);if(bytes)image=await l.doc.embedJpg(bytes);}catch{}
+ if(image){const dim=image.scaleToFit(76,64);p.drawImage(image,{x:44+(76-dim.width)/2,y:H-top-10-dim.height,...dim});}else p.drawText(a.mime==='application/pdf'?'PDF':'IMAGEM',{x:47,y:H-top-35,size:10,font:l.bold,color:grey});
+ p.drawText(fit(`${i+1}. ${a.name}`,415,l.bold,9),{x:132,y:H-top-17,size:9,font:l.bold,color:navy});const description=clean(a.description||'Sem descrição adicional.');const words=description.split(/\s+/);let line='',lines:string[]=[];for(const word of words){if(l.regular.widthOfTextAtSize(line+' '+word,8)>411){lines.push(line);line=word;}else line+=(line?' ':'')+word;}lines.push(line);lines.slice(0,2).forEach((s,n)=>p.drawText(fit(s,411,l.regular,8),{x:132,y:H-top-32-n*11,size:8,font:l.regular,color:grey}));
+ p.drawText('Abrir / baixar original · acesso com login',{x:132,y:H-top-62,size:9,font:l.bold,color:navy});p.drawText(`${Math.ceil(a.size/1024)} KB · arquivo privado no Drive`,{x:132,y:H-top-76,size:7,font:l.regular,color:grey});
+ const link=l.doc.context.register(l.doc.context.obj({Type:'Annot',Subtype:'Link',Rect:[132,H-top-67,400,H-top-50],Border:[0,0,0],A:{Type:'Action',S:'URI',URI:PDFString.of(origin+attachmentUrl(a.id))}}));const annots=p.node.Annots();if(annots)annots.push(link);else p.node.set(PDFName.of('Annots'),l.doc.context.obj([link]));l.setY(top+94);
+ }
+}
