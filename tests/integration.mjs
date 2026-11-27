@@ -202,6 +202,13 @@ await import('./personnel-events.mjs');
   console.warn=()=>{};
   globalThis.fetch=async()=>{if(++attempts===1)throw new TypeError('fetch failed',{cause:{code:'ECONNRESET'}});return Response.json(rows);};
   assert.equal((await loadSisgeo(date)).patch.prevention[0],'3');assert.equal(attempts,2);
+  attempts=0;
+  globalThis.fetch=async()=>{attempts++;throw new TypeError('fetch failed',{cause:{code:'UND_ERR_CONNECT_TIMEOUT'}});};
+  const recovered=await loadSisgeo(date,async body=>{
+   assert.equal(JSON.parse(body).dataInicio,date+' 00:00:00');
+   return Response.json(rows);
+  });
+  assert.equal(recovered.patch.prevention[0],'3');assert.equal(attempts,1);
   attempts=0;globalThis.fetch=async()=>{attempts++;throw new TypeError('fetch failed');};
   await assert.rejects(loadSisgeo(date),{message:/Não foi possível conectar/,status:503});assert.equal(attempts,2);
   attempts=0;globalThis.fetch=async()=>{attempts++;return new Response(null,{status:302,headers:{Location:'/Sisgeo/Entrar'}});};
